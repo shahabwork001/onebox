@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/.next/
+.env*
+!.env.example
+.docker/
+.dotnet/
+.nuget/
+.packages-source/
+*.log
+*.user
+*.suo
+.vs/

@@ -1,0 +1,15 @@
+.git
+.docker
+.dotnet
+.nuget
+.packages-source
+**/bin
+**/obj
+**/node_modules
+**/.next
+*.log
+.env*
+!.env.example
+.vs
+*.user
+*.suo
