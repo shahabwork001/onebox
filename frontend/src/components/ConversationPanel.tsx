@@ -27,6 +27,7 @@ export function ConversationPanel({
   isOwner,
   composer,
   onComposerChange,
+  onBack,
   actions,
 }: {
   ticket: Ticket | null;
@@ -40,6 +41,7 @@ export function ConversationPanel({
   isOwner: boolean;
   composer: string;
   onComposerChange: (value: string) => void;
+  onBack: () => void;
   actions: ConversationActions;
 }) {
   const bottom = useRef<HTMLDivElement>(null);
@@ -80,6 +82,12 @@ export function ConversationPanel({
   return (
     <section className="conversation">
       <header className="panel-header conversation-header">
+        {/* Only rendered on narrow layouts, where the list and the thread share one column. */}
+        <button type="button" className="back-button" onClick={onBack} aria-label="Back to conversations">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
         <Avatar name={ticket.contactName} size="lg" />
         <div className="conversation-identity">
           <h2>{ticket.contactName || ticket.phoneNumber}</h2>

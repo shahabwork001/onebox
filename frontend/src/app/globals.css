@@ -81,6 +81,7 @@ button:disabled {
 /* ---------------------------------------------------------------- shell */
 .workspace {
   height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 248px 360px 1fr;
   overflow: hidden;
@@ -456,11 +457,18 @@ button:disabled {
 }
 
 .conversation-header {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .conversation-identity {
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.conversation-identity h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conversation-identity h2 {
@@ -488,7 +496,30 @@ button:disabled {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+/* Shown only once the layout collapses to a single content column. */
+.back-button {
+  display: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+}
+
+.back-button:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.nav-icon {
+  flex: 0 0 auto;
 }
 
 .messages {
@@ -857,6 +888,7 @@ button:disabled {
 /* ---------------------------------------------------------------- login */
 .login {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(400px, 45%) 1fr;
   background: var(--surface);
@@ -952,21 +984,16 @@ button:disabled {
 }
 
 /* ---------------------------------------------------------------- responsive */
-@media (max-width: 1100px) {
+
+/* Laptop — the rail collapses to icons, so every nav item needs its icon to carry it. */
+@media (max-width: 1180px) {
   .workspace {
-    grid-template-columns: 72px 320px 1fr;
+    grid-template-columns: 68px 330px minmax(0, 1fr);
   }
 
   .sidebar {
-    padding: 20px 8px;
-  }
-
-  .brand-copy,
-  .nav-label,
-  .profile-copy,
-  .profile-signout,
-  .realtime {
-    display: none;
+    padding: 18px 8px;
+    align-items: center;
   }
 
   .brand {
@@ -974,13 +1001,57 @@ button:disabled {
     justify-content: center;
   }
 
+  .brand-copy,
+  .nav-label,
+  .profile-copy,
+  .realtime-label {
+    display: none;
+  }
+
+  .sidebar nav {
+    width: 100%;
+  }
+
   .nav-item {
+    position: relative;
     justify-content: center;
-    height: 40px;
+    height: 42px;
+    padding: 0;
+  }
+
+  .nav-count {
+    position: absolute;
+    top: 1px;
+    right: 5px;
+    padding: 0 5px;
+    font-size: 10px;
+  }
+
+  .realtime {
+    justify-content: center;
+    padding: 8px 0;
   }
 
   .profile {
     justify-content: center;
+    width: 100%;
+  }
+
+  /* Action buttons get their own scrollable row rather than squeezing the contact name. */
+  .conversation-header {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .actions {
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .actions::-webkit-scrollbar {
+    display: none;
   }
 
   .messages {
@@ -992,19 +1063,36 @@ button:disabled {
   }
 }
 
-@media (max-width: 760px) {
+/* Tablet — one content pane at a time, with the back button as the way out. */
+@media (max-width: 900px) {
   .workspace {
-    grid-template-columns: 64px 1fr;
+    grid-template-columns: 68px minmax(0, 1fr);
   }
 
+  .inbox,
   .conversation {
-    position: fixed;
-    inset: 0 0 0 64px;
-    z-index: 5;
+    grid-column: 2;
+    grid-row: 1;
   }
 
-  .conversation:has(.empty-state) {
+  .inbox {
+    border-right: 0;
+  }
+
+  .workspace:not(.has-selection) .conversation {
     display: none;
+  }
+
+  .workspace.has-selection .inbox {
+    display: none;
+  }
+
+  .back-button {
+    display: grid;
+  }
+
+  .bubble {
+    max-width: 86%;
   }
 
   .login {
@@ -1014,8 +1102,146 @@ button:disabled {
   .login-art {
     display: none;
   }
+}
+
+/* Phone — the rail becomes a bottom tab bar so the thread gets the full width. */
+@media (max-width: 600px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .inbox,
+  .conversation {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .sidebar {
+    grid-column: 1;
+    grid-row: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-top: 1px solid #2b493f;
+  }
+
+  .brand,
+  .realtime {
+    display: none;
+  }
+
+  .sidebar nav {
+    margin: 0;
+    flex: 1;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+  }
+
+  .nav-item {
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    height: 50px;
+  }
+
+  .nav-label {
+    display: block;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .nav-count {
+    top: 3px;
+    right: 22%;
+  }
+
+  .profile {
+    margin: 0;
+    padding: 0 2px;
+    border-top: 0;
+  }
+
+  .profile .avatar {
+    display: none;
+  }
+
+  .panel-header {
+    min-height: 60px;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .panel-header h1 {
+    font-size: 16px;
+  }
+
+  .conversation-identity h2 {
+    font-size: 14px;
+  }
+
+  .search {
+    margin: 10px 12px 8px;
+  }
+
+  .filters {
+    padding: 0 12px 10px;
+  }
+
+  .ticket {
+    padding: 11px 12px;
+  }
+
+  .messages {
+    padding: 14px 12px;
+    background-size: 15px 15px;
+  }
+
+  .bubble {
+    max-width: 90%;
+  }
+
+  .composer {
+    padding: 10px 12px;
+  }
+
+  .button {
+    padding: 9px 12px;
+  }
 
   .login-form {
-    padding: 32px 24px;
+    padding: 28px 20px;
+  }
+
+  .login-form .brand {
+    margin-bottom: 36px;
+  }
+
+  .login-form h1 {
+    font-size: 26px;
+  }
+
+  .toast {
+    right: 12px;
+    left: 12px;
+    bottom: 74px;
+    max-width: none;
+  }
+}
+
+/* Touch input needs a larger hit area than a mouse, independent of viewport width. */
+@media (pointer: coarse) {
+  .button,
+  .icon-button,
+  .back-button,
+  .assign-option {
+    min-height: 40px;
+  }
+
+  .chip {
+    padding: 8px 14px;
   }
 }

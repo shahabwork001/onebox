@@ -173,7 +173,8 @@ export default function Workspace() {
   const isOwner = !!selected && selected.assignedAgentId === auth.user.id;
 
   return (
-    <main className="workspace">
+    // `has-selection` drives which single pane is visible once the layout collapses to one column.
+    <main className={selected ? "workspace has-selection" : "workspace"}>
       <Sidebar
         user={auth.user}
         scope={scope}
@@ -215,6 +216,7 @@ export default function Workspace() {
         isOwner={isOwner}
         composer={composer}
         onComposerChange={setComposer}
+        onBack={() => setSelectedId(null)}
         actions={{
           onClaim: () => selected && run(() => api.claim(auth.accessToken, selected.id), "mine"),
           onRelease: () => selected && run(() => api.release(auth.accessToken, selected.id), "unassigned"),
