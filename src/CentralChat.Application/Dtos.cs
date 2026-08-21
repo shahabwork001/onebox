@@ -1,0 +1,19 @@
+using CentralChat.Domain;
+
+namespace CentralChat.Application;
+
+public record LoginRequest(string Email, string Password);
+public record RefreshRequest(string RefreshToken);
+public record AuthResponse(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, UserDto User);
+public record UserDto(Guid Id, string Email, string DisplayName, IReadOnlyCollection<string> Roles, IReadOnlyCollection<string> Permissions);
+public record TicketListItem(Guid Id, string Number, TicketStatus Status, TicketPriority Priority, Guid ContactId, string ContactName, string PhoneNumber, Guid ConversationId, Guid? AssignedAgentId, DateTimeOffset LastActivityAt, string? LastMessage);
+public record ConversationDto(Guid Id, Guid ContactId, string ContactName, string PhoneNumber, Guid? AssignedAgentId, Guid? TicketId);
+public record MessageDto(Guid Id, Guid ConversationId, MessageDirection Direction, MessageType Type, string? Text, MessageStatus Status, DateTimeOffset Timestamp, string? ExternalMessageId);
+public record SendMessageRequest(string Text);
+public record AssignTicketRequest(Guid AgentId, string? Reason);
+public record TicketStatusChangeRequest(string? Reason);
+public record ContactDto(Guid Id, string DisplayName, string PhoneNumber, string? WhatsAppUserId, Guid? AssignedAgentId, DateTimeOffset? LastMessageAt, ContactStatus Status);
+public record AgentDto(Guid Id, string Email, string DisplayName, bool IsActive, IReadOnlyCollection<string> Roles);
+public record TeamDto(Guid Id, string Name, int MemberCount);
+public record IngestWebhookResult(Guid EventId, bool Duplicate);
+public record PagedResult<T>(IReadOnlyCollection<T> Items, int Page, int PageSize, int Total);

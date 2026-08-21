@@ -10,7 +10,14 @@ The backend follows Clean Architecture dependency direction:
 - `CentralChat.Application` — use-case contracts, DTOs, permissions, validation, and application exceptions.
 - `CentralChat.Infrastructure` — EF Core/PostgreSQL, Identity, JWT issuance, RabbitMQ, Redis SignalR backplane, Meta client, outbox/inbox workers, audit and realtime routing.
 - `CentralChat.API` — REST controllers, webhook, SignalR hub mapping, rate limiting, CORS, ProblemDetails middleware, health checks, and development seed.
-- `frontend` — Next.js App Router/TypeScript agent workspace.
+- `frontend` — Next.js App Router/TypeScript agent workspace. `src/lib` holds the typed API client,
+  session storage and formatting helpers, `src/hooks` the SignalR subscription, `src/components` the
+  inbox panels, and `src/app/page.tsx` only composes them.
+
+Backend types are one-per-file and named after the type they contain, so a class can be found from its
+name alone: `Permissions`, `Dtos`, `Abstractions` and `Exceptions` in Application; `TicketService` and
+`ConversationService` in Infrastructure; `CurrentUser`, `ExceptionMiddleware`, `DatabaseInitializer`
+and `HealthChecks` in the API.
 
 PostgreSQL is authoritative. RabbitMQ transports durable integration work, Redis provides SignalR scale-out, and SignalR only provides realtime hints; the UI always reloads authoritative REST state after reconnecting.
 
@@ -195,6 +202,11 @@ A ticket moves `New → Open` when it is claimed or assigned, and reaches a term
 `/resolve` or `/close`. `/reopen` returns a terminal ticket to `Open` and clears its resolution and
 closure timestamps. Invalid transitions return `409`; only the assigned agent, or a caller holding
 `tickets.assign`, may change a ticket's status.
+
+An agent may hand a ticket back with `/unassign`, which clears the assignment but leaves the ticket
+`Open` with its history intact, so it returns to the unassigned queue for another agent to claim.
+Agents may release only their own tickets; taking a ticket off another agent still requires
+`tickets.assign`.
 
 The two terminal states differ in what happens to contact ownership:
 

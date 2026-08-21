@@ -48,7 +48,17 @@ public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier rea
     }
 
     public Task AssignAsync(Guid ticketId, Guid agentId, Guid changedBy, string? reason, CancellationToken ct) => ChangeAssignmentAsync(ticketId, agentId, changedBy, reason, ct);
-    public Task UnassignAsync(Guid ticketId, Guid changedBy, string? reason, CancellationToken ct) => ChangeAssignmentAsync(ticketId, null, changedBy, reason, ct);
+    public async Task UnassignAsync(Guid ticketId, Guid changedBy, bool privileged, string? reason, CancellationToken ct)
+    {
+        // Releasing a ticket back to the queue is the assigned agent's own call; taking one off another
+        // agent is an administrative act and still needs tickets.assign.
+        if (!privileged)
+        {
+            var ticket = await db.Tickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ticketId, ct) ?? throw new NotFoundException("Ticket not found.");
+            if (ticket.AssignedAgentId != changedBy) throw new ForbiddenException("Only the assigned agent can release this ticket.");
+        }
+        await ChangeAssignmentAsync(ticketId, null, changedBy, reason, ct);
+    }
     public Task ResolveAsync(Guid ticketId, Guid userId, bool privileged, string? reason, CancellationToken ct) => ChangeStatusAsync(ticketId, TicketStatus.Resolved, userId, privileged, reason, ct);
     public Task CloseAsync(Guid ticketId, Guid userId, bool privileged, string? reason, CancellationToken ct) => ChangeStatusAsync(ticketId, TicketStatus.Closed, userId, privileged, reason, ct);
     public Task ReopenAsync(Guid ticketId, Guid userId, bool privileged, string? reason, CancellationToken ct) => ChangeStatusAsync(ticketId, TicketStatus.Open, userId, privileged, reason, ct);
@@ -98,35 +108,5 @@ public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier rea
         await realtime.ConversationAsync(ticket.ConversationId, "ticket.status.changed", payload, ct);
         if (ticket.AssignedAgentId.HasValue) await realtime.UserAsync(ticket.AssignedAgentId.Value, "ticket.status.changed", payload, ct);
         else await realtime.UnassignedAsync("ticket.status.changed", payload, ct);
-    }
-}
-
-public sealed class ConversationService(CentralChatDbContext db) : IConversationService
-{
-    public async Task<ConversationDto> GetAsync(Guid id, Guid userId, bool privileged, CancellationToken ct)
-    {
-        var result = await (from c in db.Conversations.AsNoTracking() join contact in db.Contacts.AsNoTracking() on c.ContactId equals contact.Id join t in db.Tickets.AsNoTracking() on c.Id equals t.ConversationId into tickets from t in tickets.DefaultIfEmpty() where c.Id == id select new ConversationDto(c.Id, contact.Id, contact.DisplayName, contact.PhoneNumber, contact.CurrentAssignedAgentId, t == null ? null : t.Id)).FirstOrDefaultAsync(ct) ?? throw new NotFoundException("Conversation not found.");
-        if (!privileged && result.AssignedAgentId != userId) throw new ForbiddenException("This conversation is assigned to another agent.");
-        return result;
-    }
-
-    public async Task<IReadOnlyCollection<MessageDto>> MessagesAsync(Guid id, Guid? beforeId, int limit, Guid userId, bool privileged, CancellationToken ct)
-    {
-        await GetAsync(id, userId, privileged, ct); limit = Math.Clamp(limit, 1, 100);
-        var query = db.ChatMessages.AsNoTracking().Where(x => x.ConversationId == id);
-        if (beforeId.HasValue) { var cursor = await db.ChatMessages.AsNoTracking().SingleOrDefaultAsync(x => x.Id == beforeId, ct) ?? throw new NotFoundException("Message cursor not found."); query = query.Where(x => x.ProviderTimestamp < cursor.ProviderTimestamp); }
-        return await query.OrderByDescending(x => x.ProviderTimestamp).ThenByDescending(x => x.Id).Take(limit).Select(x => new MessageDto(x.Id, x.ConversationId, x.Direction, x.Type, x.TextBody, x.Status, x.ProviderTimestamp, x.ExternalMessageId)).ToListAsync(ct);
-    }
-
-    public async Task<MessageDto> SendAsync(Guid id, string text, Guid userId, bool privileged, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(text) || text.Length > 4096) throw new ValidationException("Message text is required and must not exceed 4096 characters.");
-        var conversation = await GetAsync(id, userId, privileged, ct);
-        var channelId = await db.Conversations.Where(x => x.Id == id).Select(x => x.ChannelId).SingleAsync(ct);
-        var message = new ChatMessage(id, conversation.ContactId, channelId, MessageDirection.Outbound, MessageType.Text, text.Trim(), null, DateTimeOffset.UtcNow); message.SetSender(userId);
-        db.ChatMessages.Add(message);
-        db.OutboxMessages.Add(new OutboxMessage { Type = "OutboundWhatsAppMessageRequested", Payload = JsonSerializer.Serialize(new { MessageId = message.Id }) });
-        await db.SaveChangesAsync(ct);
-        return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null);
     }
 }

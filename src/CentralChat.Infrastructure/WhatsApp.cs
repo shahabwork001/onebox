@@ -37,14 +37,45 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
         catch (DbUpdateException) { db.ChangeTracker.Clear(); existing = await db.WebhookEvents.AsNoTracking().SingleAsync(x => x.PayloadHash == hash, ct); return new(existing.Id, true); }
     }
 
+    // Webhook events are consumed concurrently, and any of them may be the first to touch a channel,
+    // contact, conversation or ticket. Losing that insert race surfaces as a unique-index violation, and
+    // without a retry the event is dead-lettered and the customer's messages are silently dropped.
+    // Re-running the traversal finds the rows the winner wrote, so a bounded retry converges.
+    private const int ProcessAttempts = 4;
+
     public async Task ProcessAsync(Guid eventId, CancellationToken ct)
     {
-        var webhook = await db.WebhookEvents.SingleOrDefaultAsync(x => x.Id == eventId, ct) ?? throw new InvalidOperationException($"Webhook event {eventId} was not found.");
-        if (webhook.ProcessingStatus == WebhookProcessingStatus.Processed) return;
-        using var document = JsonDocument.Parse(webhook.Payload);
-        if (!document.RootElement.TryGetProperty("entry", out var entries) || entries.ValueKind != JsonValueKind.Array) { webhook.MarkProcessed(); await db.SaveChangesAsync(ct); return; }
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                var notifications = await ProcessOnceAsync(eventId, ct);
+                foreach (var n in notifications)
+                {
+                    await realtime.ConversationAsync(n.ConversationId, "message.received", n.Message, ct);
+                    if (n.AgentId.HasValue) await realtime.UserAsync(n.AgentId.Value, "message.received", new { n.TicketId, Message = n.Message }, ct);
+                    else await realtime.UnassignedAsync("ticket.created", new { n.TicketId, Message = n.Message }, ct);
+                }
+                logger.LogInformation("Processed webhook {WebhookEventId} with {MessageCount} new messages", eventId, notifications.Count);
+                return;
+            }
+            catch (DbUpdateException ex) when (attempt < ProcessAttempts)
+            {
+                db.ChangeTracker.Clear();
+                logger.LogWarning(ex, "Webhook {WebhookEventId} lost an insert race on attempt {Attempt}; retrying", eventId, attempt);
+            }
+        }
+    }
 
+    private async Task<List<(Guid? AgentId, Guid ConversationId, Guid TicketId, MessageDto Message)>> ProcessOnceAsync(Guid eventId, CancellationToken ct)
+    {
         var notifications = new List<(Guid? AgentId, Guid ConversationId, Guid TicketId, MessageDto Message)>();
+        var resolved = new ResolutionCache();
+        var webhook = await db.WebhookEvents.SingleOrDefaultAsync(x => x.Id == eventId, ct) ?? throw new InvalidOperationException($"Webhook event {eventId} was not found.");
+        if (webhook.ProcessingStatus == WebhookProcessingStatus.Processed) return notifications;
+        using var document = JsonDocument.Parse(webhook.Payload);
+        if (!document.RootElement.TryGetProperty("entry", out var entries) || entries.ValueKind != JsonValueKind.Array) { webhook.MarkProcessed(); await db.SaveChangesAsync(ct); return notifications; }
+
         foreach (var entry in entries.EnumerateArray())
         {
             if (!entry.TryGetProperty("changes", out var changes) || changes.ValueKind != JsonValueKind.Array) continue;
@@ -53,8 +84,7 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
                 if (!change.TryGetProperty("value", out var value)) continue;
                 var phoneNumberId = value.TryGetProperty("metadata", out var metadata) && metadata.TryGetProperty("phone_number_id", out var pid) ? pid.GetString() : null;
                 if (string.IsNullOrWhiteSpace(phoneNumberId)) continue;
-                var channel = await db.WhatsAppChannels.SingleOrDefaultAsync(x => x.PhoneNumberId == phoneNumberId, ct);
-                if (channel is null) { channel = new WhatsAppChannel($"WhatsApp {phoneNumberId}", phoneNumberId); db.WhatsAppChannels.Add(channel); }
+                var channel = await ResolveChannelAsync(resolved, phoneNumberId, ct);
                 var profiles = ExtractProfiles(value);
 
                 if (value.TryGetProperty("messages", out var messages) && messages.ValueKind == JsonValueKind.Array)
@@ -62,15 +92,13 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
                     foreach (var incoming in messages.EnumerateArray())
                     {
                         var externalId = incoming.TryGetProperty("id", out var mid) ? mid.GetString() : null;
-                        if (string.IsNullOrWhiteSpace(externalId) || await db.ChatMessages.AnyAsync(x => x.ExternalMessageId == externalId, ct)) continue;
+                        if (string.IsNullOrWhiteSpace(externalId) || !resolved.MessageIds.Add(externalId) || await db.ChatMessages.AnyAsync(x => x.ExternalMessageId == externalId, ct)) continue;
                         var waId = incoming.TryGetProperty("from", out var from) ? from.GetString() : null;
                         if (string.IsNullOrWhiteSpace(waId)) continue;
-                        var contact = await db.Contacts.SingleOrDefaultAsync(x => x.ChannelId == channel.Id && x.WhatsAppUserId == waId, ct);
-                        if (contact is null) { profiles.TryGetValue(waId, out var profile); contact = new Contact(channel.Id, NormalizePhone(waId), waId, profile); db.Contacts.Add(contact); }
-                        var conversation = await db.Conversations.SingleOrDefaultAsync(x => x.ContactId == contact.Id && x.ChannelId == channel.Id && x.Status == ConversationStatus.Open, ct);
-                        if (conversation is null) { conversation = new Conversation(contact.Id, channel.Id); db.Conversations.Add(conversation); }
-                        var ticket = await db.Tickets.SingleOrDefaultAsync(x => x.ContactId == contact.Id && x.Status != TicketStatus.Closed && x.Status != TicketStatus.Resolved, ct);
-                        if (ticket is null) { ticket = new Ticket(contact.Id, conversation.Id, $"WA-{DateTimeOffset.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..20]); if (contact.CurrentAssignedAgentId.HasValue) ticket.Assign(contact.CurrentAssignedAgentId); db.Tickets.Add(ticket); }
+                        profiles.TryGetValue(waId, out var profile);
+                        var contact = await ResolveContactAsync(resolved, channel, waId, profile, ct);
+                        var conversation = await ResolveConversationAsync(resolved, contact, channel, ct);
+                        var ticket = await ResolveTicketAsync(resolved, contact, conversation, ct);
                         var timestamp = ParseTimestamp(incoming);
                         var (type, body) = ExtractContent(incoming);
                         var message = new ChatMessage(conversation.Id, contact.Id, channel.Id, MessageDirection.Inbound, type, body, externalId, timestamp);
@@ -86,13 +114,64 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
             }
         }
         webhook.MarkProcessed(); await db.SaveChangesAsync(ct);
-        foreach (var n in notifications)
+        return notifications;
+    }
+
+    /// <summary>
+    /// One Meta payload routinely carries several messages from the same sender, and everything they
+    /// need — channel, contact, conversation, ticket — is only created once, at the end, by a single
+    /// SaveChanges. Querying the DbSet mid-loop cannot see those pending inserts, so without this cache
+    /// the second message would add a duplicate contact and the whole event would fail on its unique
+    /// index. Resolving through the cache keeps one instance per payload.
+    /// </summary>
+    private sealed class ResolutionCache
+    {
+        public Dictionary<string, WhatsAppChannel> Channels { get; } = new(StringComparer.Ordinal);
+        public Dictionary<(Guid ChannelId, string WaId), Contact> Contacts { get; } = [];
+        public Dictionary<Guid, Conversation> Conversations { get; } = [];
+        public Dictionary<Guid, Ticket> Tickets { get; } = [];
+        public HashSet<string> MessageIds { get; } = new(StringComparer.Ordinal);
+    }
+
+    private async Task<WhatsAppChannel> ResolveChannelAsync(ResolutionCache cache, string phoneNumberId, CancellationToken ct)
+    {
+        if (cache.Channels.TryGetValue(phoneNumberId, out var cached)) return cached;
+        var channel = await db.WhatsAppChannels.SingleOrDefaultAsync(x => x.PhoneNumberId == phoneNumberId, ct);
+        if (channel is null) { channel = new WhatsAppChannel($"WhatsApp {phoneNumberId}", phoneNumberId); db.WhatsAppChannels.Add(channel); }
+        cache.Channels[phoneNumberId] = channel;
+        return channel;
+    }
+
+    private async Task<Contact> ResolveContactAsync(ResolutionCache cache, WhatsAppChannel channel, string waId, string? profile, CancellationToken ct)
+    {
+        if (cache.Contacts.TryGetValue((channel.Id, waId), out var cached)) return cached;
+        var contact = await db.Contacts.SingleOrDefaultAsync(x => x.ChannelId == channel.Id && x.WhatsAppUserId == waId, ct);
+        if (contact is null) { contact = new Contact(channel.Id, NormalizePhone(waId), waId, profile); db.Contacts.Add(contact); }
+        cache.Contacts[(channel.Id, waId)] = contact;
+        return contact;
+    }
+
+    private async Task<Conversation> ResolveConversationAsync(ResolutionCache cache, Contact contact, WhatsAppChannel channel, CancellationToken ct)
+    {
+        if (cache.Conversations.TryGetValue(contact.Id, out var cached)) return cached;
+        var conversation = await db.Conversations.SingleOrDefaultAsync(x => x.ContactId == contact.Id && x.ChannelId == channel.Id && x.Status == ConversationStatus.Open, ct);
+        if (conversation is null) { conversation = new Conversation(contact.Id, channel.Id); db.Conversations.Add(conversation); }
+        cache.Conversations[contact.Id] = conversation;
+        return conversation;
+    }
+
+    private async Task<Ticket> ResolveTicketAsync(ResolutionCache cache, Contact contact, Conversation conversation, CancellationToken ct)
+    {
+        if (cache.Tickets.TryGetValue(contact.Id, out var cached)) return cached;
+        var ticket = await db.Tickets.SingleOrDefaultAsync(x => x.ContactId == contact.Id && x.Status != TicketStatus.Closed && x.Status != TicketStatus.Resolved, ct);
+        if (ticket is null)
         {
-            await realtime.ConversationAsync(n.ConversationId, "message.received", n.Message, ct);
-            if (n.AgentId.HasValue) await realtime.UserAsync(n.AgentId.Value, "message.received", new { n.TicketId, Message = n.Message }, ct);
-            else await realtime.UnassignedAsync("ticket.created", new { n.TicketId, Message = n.Message }, ct);
+            ticket = new Ticket(contact.Id, conversation.Id, $"WA-{DateTimeOffset.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..20]);
+            if (contact.CurrentAssignedAgentId.HasValue) ticket.Assign(contact.CurrentAssignedAgentId);
+            db.Tickets.Add(ticket);
         }
-        logger.LogInformation("Processed webhook {WebhookEventId} with {MessageCount} new messages", eventId, notifications.Count);
+        cache.Tickets[contact.Id] = ticket;
+        return ticket;
     }
 
     private async Task ApplyStatusAsync(JsonElement status, CancellationToken ct)
