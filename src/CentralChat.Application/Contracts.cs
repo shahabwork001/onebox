@@ -8,6 +8,7 @@ public static class Permissions
     public const string TicketsView = "tickets.view";
     public const string TicketsClaim = "tickets.claim";
     public const string TicketsAssign = "tickets.assign";
+    public const string TicketsResolve = "tickets.resolve";
     public const string MessagesView = "messages.view";
     public const string MessagesSend = "messages.send";
     public const string UsersManage = "users.manage";
@@ -23,6 +24,7 @@ public record ConversationDto(Guid Id, Guid ContactId, string ContactName, strin
 public record MessageDto(Guid Id, Guid ConversationId, MessageDirection Direction, MessageType Type, string? Text, MessageStatus Status, DateTimeOffset Timestamp, string? ExternalMessageId);
 public record SendMessageRequest(string Text);
 public record AssignTicketRequest(Guid AgentId, string? Reason);
+public record TicketStatusChangeRequest(string? Reason);
 public record ContactDto(Guid Id, string DisplayName, string PhoneNumber, string? WhatsAppUserId, Guid? AssignedAgentId, DateTimeOffset? LastMessageAt, ContactStatus Status);
 public record AgentDto(Guid Id, string Email, string DisplayName, bool IsActive, IReadOnlyCollection<string> Roles);
 public record TeamDto(Guid Id, string Name, int MemberCount);
@@ -38,10 +40,13 @@ public interface IAuthService
 
 public interface ITicketService
 {
-    Task<PagedResult<TicketListItem>> ListAsync(string scope, Guid userId, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<TicketListItem>> ListAsync(string scope, string? status, Guid userId, int page, int pageSize, CancellationToken cancellationToken);
     Task ClaimAsync(Guid ticketId, Guid userId, CancellationToken cancellationToken);
     Task AssignAsync(Guid ticketId, Guid agentId, Guid changedBy, string? reason, CancellationToken cancellationToken);
     Task UnassignAsync(Guid ticketId, Guid changedBy, string? reason, CancellationToken cancellationToken);
+    Task ResolveAsync(Guid ticketId, Guid userId, bool privileged, string? reason, CancellationToken cancellationToken);
+    Task CloseAsync(Guid ticketId, Guid userId, bool privileged, string? reason, CancellationToken cancellationToken);
+    Task ReopenAsync(Guid ticketId, Guid userId, bool privileged, string? reason, CancellationToken cancellationToken);
 }
 
 public interface IConversationService

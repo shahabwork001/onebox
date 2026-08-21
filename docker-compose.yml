@@ -53,6 +53,13 @@ services:
       MetaWhatsApp__AccessToken: ${META_ACCESS_TOKEN:-development-access-token}
       MetaWhatsApp__ValidateSignature: ${META_VALIDATE_SIGNATURE:-false}
       MetaWhatsApp__UseDevelopmentClient: ${META_USE_DEVELOPMENT_CLIENT:-true}
+      Bootstrap__AdminEmail: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      Bootstrap__AdminPassword: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      Bootstrap__AdminDisplayName: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:-Administrator}
+      Bootstrap__AdminRole: ${BOOTSTRAP_ADMIN_ROLE:-SuperAdmin}
+      Bootstrap__AgentEmails: ${BOOTSTRAP_AGENT_EMAILS:-}
+      Bootstrap__AgentPassword: ${BOOTSTRAP_AGENT_PASSWORD:-}
+      Bootstrap__TeamName: ${BOOTSTRAP_TEAM_NAME:-Support}
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }

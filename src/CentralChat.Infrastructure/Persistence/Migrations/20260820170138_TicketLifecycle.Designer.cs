@@ -3,6 +3,7 @@ using System;
 using CentralChat.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CentralChat.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CentralChatDbContext))]
-    partial class CentralChatDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260820170138_TicketLifecycle")]
+    partial class TicketLifecycle
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

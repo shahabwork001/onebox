@@ -63,9 +63,17 @@ public sealed class Ticket : Entity
     public Guid? AssignedAgentId { get; private set; }
     public Guid? AssignedTeamId { get; private set; }
     public DateTimeOffset LastActivityAt { get; private set; }
+    public DateTimeOffset? ResolvedAt { get; private set; }
     public DateTimeOffset? ClosedAt { get; private set; }
-    public void Assign(Guid? agentId, Guid? teamId = null) { AssignedAgentId = agentId; AssignedTeamId = teamId; Status = TicketStatus.Open; UpdatedAt = DateTimeOffset.UtcNow; }
+    public bool IsTerminal => Status is TicketStatus.Resolved or TicketStatus.Closed;
+    public bool CanResolve => Status is TicketStatus.New or TicketStatus.Open or TicketStatus.Pending;
+    public bool CanClose => Status != TicketStatus.Closed;
+    public bool CanReopen => IsTerminal;
+    public void Assign(Guid? agentId, Guid? teamId = null) { AssignedAgentId = agentId; AssignedTeamId = teamId; if (agentId.HasValue && Status == TicketStatus.New) Status = TicketStatus.Open; UpdatedAt = DateTimeOffset.UtcNow; }
     public void Touch(DateTimeOffset timestamp) { LastActivityAt = timestamp; UpdatedAt = DateTimeOffset.UtcNow; }
+    public void Resolve() { if (!CanResolve) throw new InvalidOperationException($"A {Status} ticket cannot be resolved."); Status = TicketStatus.Resolved; ResolvedAt = DateTimeOffset.UtcNow; UpdatedAt = ResolvedAt.Value; }
+    public void Close() { if (!CanClose) throw new InvalidOperationException("The ticket is already closed."); Status = TicketStatus.Closed; ClosedAt = DateTimeOffset.UtcNow; UpdatedAt = ClosedAt.Value; }
+    public void Reopen() { if (!CanReopen) throw new InvalidOperationException($"A {Status} ticket is already active."); Status = TicketStatus.Open; ResolvedAt = null; ClosedAt = null; UpdatedAt = DateTimeOffset.UtcNow; }
 }
 
 public sealed class ChatMessage : Entity

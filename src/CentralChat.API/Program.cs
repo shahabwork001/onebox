@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
 builder.Services.AddHttpContextAccessor(); builder.Services.AddScoped<ICurrentUser, CurrentUser>();
-builder.Services.AddControllers(); builder.Services.AddProblemDetails();
+builder.Services.AddControllers().AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter())); builder.Services.AddProblemDetails();
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? throw new InvalidOperationException("JWT configuration is missing.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
 {
@@ -22,7 +22,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization(o =>
 {
-    foreach (var permission in new[] { Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.MessagesView, Permissions.MessagesSend, Permissions.UsersManage, Permissions.SettingsManage })
+    foreach (var permission in new[] { Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.TicketsResolve, Permissions.MessagesView, Permissions.MessagesSend, Permissions.UsersManage, Permissions.SettingsManage })
         o.AddPolicy(permission, p => p.RequireClaim("permission", permission));
 });
 var signalR = builder.Services.AddSignalR(); var redis = builder.Configuration.GetConnectionString("Redis"); if (!string.IsNullOrWhiteSpace(redis)) signalR.AddStackExchangeRedis(redis);
@@ -46,6 +46,13 @@ app.UseCors("frontend"); app.UseRateLimiter(); app.UseAuthentication(); app.UseA
 app.MapControllers().RequireRateLimiting("api"); app.MapHub<CommunicationHub>("/hubs/communication");
 app.MapHealthChecks("/health"); app.MapHealthChecks("/health/ready"); app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
 if (app.Configuration.GetValue<bool>("Database:ApplyMigrations")) await DatabaseInitializer.InitializeAsync(app.Services, app.Environment.IsDevelopment());
+if (!app.Environment.IsDevelopment())
+{
+    var meta = app.Configuration.GetSection(MetaWhatsAppOptions.Section).Get<MetaWhatsAppOptions>() ?? new();
+    var startup = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("CentralChat.API.Startup");
+    if (!meta.ValidateSignature) startup.LogWarning("MetaWhatsApp:ValidateSignature is off outside Development; /webhook accepts unsigned payloads from anyone.");
+    if (meta.UseDevelopmentClient) startup.LogWarning("MetaWhatsApp:UseDevelopmentClient is on outside Development; outbound replies are faked and never reach Meta.");
+}
 app.Run();
 
 public partial class Program { }

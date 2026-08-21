@@ -81,6 +81,32 @@ All seeded accounts use the development-only password `CentralChat1!`:
 
 The seed also creates a `Sales` team containing both agents. Seed execution is environment-gated and is not intended for production.
 
+## Production accounts
+
+Roles, permission records, and role/permission mappings are seeded in every environment, because JWT
+permission claims are read back from those tables at login. The `@example.local` users above are
+seeded only in Development.
+
+Every other environment creates its first accounts from `Bootstrap__*` configuration, so no
+credentials live in this repository:
+
+| Setting | Purpose |
+|---|---|
+| `Bootstrap__AdminEmail` | Administrator sign-in address. Bootstrapping is skipped unless this and the password are both set. |
+| `Bootstrap__AdminPassword` | Administrator password. Must satisfy the Identity policy: at least 10 characters with an uppercase letter, a lowercase letter, a digit, and a symbol. |
+| `Bootstrap__AdminDisplayName` | Defaults to `Administrator`. |
+| `Bootstrap__AdminRole` | Defaults to `SuperAdmin`; any of `SuperAdmin`, `Admin`, `TeamLead`, `Agent`. |
+| `Bootstrap__AgentEmails` | Comma-separated agent addresses. Display names are derived from the address local part. |
+| `Bootstrap__AgentPassword` | Shared password for those agents. |
+| `Bootstrap__TeamName` | Team the agents join. Defaults to `Support`. |
+
+The seeder is idempotent: it creates only what is missing and never rewrites an existing account's
+password, so it is safe on every restart. Removing the variables after the accounts exist leaves them
+in place. A rejected password or address is logged as an error rather than thrown, so a typo cannot
+stop the host from starting and ingesting webhooks — check the startup log if an account is missing.
+
+There is no user-management endpoint yet, so accounts can currently only be created this way.
+
 ## Configuration and secrets
 
 Configuration uses strongly typed `Jwt`, `RabbitMq`, and `MetaWhatsApp` option sections. Use environment variables (`__` separates nested keys), .NET User Secrets, or a production secret manager. Never place real Meta/JWT/database credentials in `appsettings.json` or frontend variables.
@@ -94,8 +120,23 @@ Important settings:
 - `MetaWhatsApp__VerifyToken`, `MetaWhatsApp__AppSecret`, `MetaWhatsApp__AccessToken`
 - `MetaWhatsApp__ValidateSignature`
 - `MetaWhatsApp__UseDevelopmentClient`
+- `Bootstrap__AdminEmail`, `Bootstrap__AdminPassword`, `Bootstrap__AgentEmails`, `Bootstrap__AgentPassword`
 
 Development explicitly disables signature validation and uses `DevelopmentWhatsAppClient`. Production defaults do not silently fall back to fake delivery.
+
+Outside Development the host logs a warning at startup if `MetaWhatsApp__ValidateSignature` is off or
+`MetaWhatsApp__UseDevelopmentClient` is on, because either setting silently breaks a deployment: the
+first accepts unsigned webhook payloads from anyone, the second never delivers replies to Meta.
+
+## Serving the frontend behind a reverse proxy
+
+`NEXT_PUBLIC_API_URL` is baked into the frontend bundle at build time, and the paths in the frontend
+already carry their own prefixes (`/api/auth/login`, `/hubs/communication`). When the proxy serves the
+frontend and the API from one origin and forwards `/api/*`, `/hubs/*`, and `/webhook` to the API
+**without stripping the prefix**, build the image with an empty `NEXT_PUBLIC_API_URL` so those paths
+resolve same-origin. Setting it to `/api` against such a proxy produces `/api/api/auth/login` and every
+request 404s. Local development keeps the `http://localhost:8080` default because the frontend runs on
+a separate origin.
 
 ## Meta webhook setup
 
@@ -116,13 +157,16 @@ POST /api/auth/login
 POST /api/auth/refresh
 POST /api/auth/logout
 
-GET  /api/tickets?scope=mine|unassigned|all
+GET  /api/tickets?scope=mine|unassigned|all&status=active|new|open|pending|resolved|closed|all
 GET  /api/tickets/mine
 GET  /api/tickets/unassigned
 POST /api/tickets/{id}/claim
 POST /api/tickets/{id}/assign
 POST /api/tickets/{id}/reassign
 POST /api/tickets/{id}/unassign
+POST /api/tickets/{id}/resolve
+POST /api/tickets/{id}/close
+POST /api/tickets/{id}/reopen
 
 GET  /api/conversations/{id}
 GET  /api/conversations/{id}/messages?limit=50&before=<messageId>
@@ -142,6 +186,27 @@ WS   /hubs/communication
 
 List routes are bounded; messages use a cursor and tickets/contacts use page/page-size limits.
 
+Enum-valued fields (ticket status, message direction/type/status) are serialised as strings rather than
+integers.
+
+## Ticket lifecycle
+
+A ticket moves `New → Open` when it is claimed or assigned, and reaches a terminal state through
+`/resolve` or `/close`. `/reopen` returns a terminal ticket to `Open` and clears its resolution and
+closure timestamps. Invalid transitions return `409`; only the assigned agent, or a caller holding
+`tickets.assign`, may change a ticket's status.
+
+The two terminal states differ in what happens to contact ownership:
+
+- **Resolved** keeps `Contact.CurrentAssignedAgentId`, so a customer who replies gets a fresh ticket
+  routed straight back to the same agent.
+- **Closed** releases the contact once no other active ticket references it, so the next inbound
+  message arrives in the unassigned queue. Reopening restores the ticket's agent as contact owner.
+
+Both transitions write an audit log entry, and any contact-ownership change is additionally recorded
+in assignment history. `GET /api/tickets` defaults to `status=active`, which excludes resolved and
+closed tickets so queues do not grow without bound.
+
 ## Migrations and tests
 
 ```powershell
@@ -155,8 +220,14 @@ npm run lint
 npm run build
 ```
 
-The implemented verification scenario covers webhook replay deduplication, stable contact/conversation/ticket reuse, assignment ownership, outbound asynchronous provider status, reassignment history, old-agent send denial, and simultaneous ticket claiming.
+`CentralChat.UnitTests` currently covers domain rules only: ticket assignment and lifecycle
+transitions, contact ownership, and outbound message state. The reliability controls listed above —
+webhook replay deduplication, outbox/inbox idempotency, concurrent claiming, and ownership denial on
+send — are implemented but **not yet covered by automated tests**; verifying them requires an
+integration suite against real PostgreSQL and RabbitMQ instances.
 
 ## Realtime event names
 
-The hub uses targeted `user:{id}`, `conversation:{id}`, and `unassigned` groups. Current events include `message.received`, `message.sent`, `message.failed`, `ticket.created`, `ticket.claimed`, `ticket.removed`, `ticket.assignment.added`, and `ticket.assignment.removed`. Clients reconnect automatically and refresh REST state.
+The hub uses targeted `user:{id}`, `conversation:{id}`, and `unassigned` groups. Current events include `message.received`, `message.sent`, `message.failed`, `ticket.created`, `ticket.claimed`, `ticket.removed`, `ticket.assignment.added`, `ticket.assignment.removed`, and `ticket.status.changed`. Clients reconnect automatically and refresh REST state.
+
+`ticket.status.changed` carries `{ ticketId, status, previousStatus, conversationId }` and is delivered to the conversation group plus either the assigned agent or the unassigned queue.

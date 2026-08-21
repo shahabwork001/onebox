@@ -14,10 +14,10 @@ public static class RolePermissions
 {
     public static readonly IReadOnlyDictionary<string, string[]> Defaults = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
-        ["SuperAdmin"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.MessagesView, Permissions.MessagesSend, Permissions.UsersManage, Permissions.SettingsManage],
-        ["Admin"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.MessagesView, Permissions.MessagesSend, Permissions.UsersManage],
-        ["TeamLead"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.MessagesView, Permissions.MessagesSend],
-        ["Agent"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.MessagesView, Permissions.MessagesSend]
+        ["SuperAdmin"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.TicketsResolve, Permissions.MessagesView, Permissions.MessagesSend, Permissions.UsersManage, Permissions.SettingsManage],
+        ["Admin"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.TicketsResolve, Permissions.MessagesView, Permissions.MessagesSend, Permissions.UsersManage],
+        ["TeamLead"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.TicketsResolve, Permissions.MessagesView, Permissions.MessagesSend],
+        ["Agent"] = [Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsResolve, Permissions.MessagesView, Permissions.MessagesSend]
     };
 }
 
