@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.Configure<RabbitMqOptions>(configuration.GetSection(RabbitMqOptions.Section));
         services.Configure<MetaWhatsAppOptions>(configuration.GetSection(MetaWhatsAppOptions.Section));
         services.Configure<BootstrapOptions>(configuration.GetSection(BootstrapOptions.Section));
+        services.Configure<RetentionOptions>(configuration.GetSection(RetentionOptions.Section));
         services.AddDbContext<CentralChatDbContext>(o => o.UseNpgsql(configuration.GetConnectionString("PostgreSql")));
         services.AddIdentityCore<ApplicationUser>(o => { o.Password.RequiredLength = 10; o.Password.RequireDigit = true; o.Password.RequireUppercase = true; o.User.RequireUniqueEmail = true; })
             .AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<CentralChatDbContext>().AddDefaultTokenProviders();
@@ -23,7 +24,7 @@ public static class DependencyInjection
         var meta = configuration.GetSection(MetaWhatsAppOptions.Section).Get<MetaWhatsAppOptions>() ?? new();
         if (meta.UseDevelopmentClient) services.AddSingleton<IWhatsAppClient, DevelopmentWhatsAppClient>();
         else services.AddHttpClient<IWhatsAppClient, MetaWhatsAppClient>(x => x.BaseAddress = new Uri("https://graph.facebook.com/"));
-        services.AddHostedService<OutboxPublisher>(); services.AddHostedService<RabbitConsumer>();
+        services.AddHostedService<OutboxPublisher>(); services.AddHostedService<RabbitConsumer>(); services.AddHostedService<RetentionService>();
         return services;
     }
 }

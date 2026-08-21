@@ -11,3 +11,11 @@ public sealed class BootstrapOptions
     public bool IsConfigured => !string.IsNullOrWhiteSpace(AdminEmail) && !string.IsNullOrWhiteSpace(AdminPassword);
     public IReadOnlyList<string> AgentEmailList => (AgentEmails ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
+
+public sealed class RetentionOptions
+{
+    public const string Section = "Retention";
+    public bool Enabled { get; set; } = true;
+    public int OutboxDays { get; set; } = 7; public int InboxDays { get; set; } = 7; public int WebhookEventDays { get; set; } = 30;
+    public int IntervalHours { get; set; } = 24; public int StartupDelayMinutes { get; set; } = 5; public int BatchSize { get; set; } = 5000;
+}

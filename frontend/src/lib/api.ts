@@ -54,6 +54,21 @@ export async function login(email: string, password: string): Promise<Auth> {
   return response.json();
 }
 
+export async function refreshSession(refreshToken: string): Promise<Auth> {
+  const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    throw new ApiError(response.status, problem?.detail ?? "Session could not be renewed.");
+  }
+
+  return response.json();
+}
+
 export const api = {
   tickets: (token: string, scope: Scope, status: StatusFilter) =>
     send<PagedResult<Ticket>>(`/api/tickets?scope=${scope}&status=${status}&pageSize=100`, token),

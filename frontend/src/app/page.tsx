@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, refreshSession } from "@/lib/api";
 import { clearSession, readSession, writeSession } from "@/lib/session";
 import { PERMISSIONS, type Agent, type Auth, type Message, type Scope, type StatusFilter, type Ticket } from "@/lib/types";
 import { useRealtime } from "@/hooks/useRealtime";
@@ -47,6 +47,25 @@ export default function Workspace() {
     setMessages([]);
     setSelectedId(null);
   }, []);
+
+  /**
+   * Access tokens live 30 minutes. Renewing a minute early keeps an agent who sits in the inbox all
+   * day from being thrown back to the login screen mid-conversation; each renewal reschedules the next.
+   */
+  useEffect(() => {
+    if (!auth) return;
+    const renewIn = Math.max(new Date(auth.expiresAt).getTime() - Date.now() - 60_000, 5_000);
+    const timer = setTimeout(async () => {
+      try {
+        const renewed = await refreshSession(auth.refreshToken);
+        writeSession(renewed);
+        setAuth(renewed);
+      } catch {
+        signOut();
+      }
+    }, renewIn);
+    return () => clearTimeout(timer);
+  }, [auth, signOut]);
 
   /** Any 401 means the stored token is spent; drop straight to the login screen rather than looping. */
   const report = useCallback(
