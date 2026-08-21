@@ -83,12 +83,14 @@ button:disabled {
   height: 100vh;
   height: 100dvh;
   display: grid;
-  grid-template-columns: 248px 360px 1fr;
+  grid-template-columns: 248px 360px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--surface);
 }
 
 .panel-header {
+  flex: 0 0 auto;
   min-height: 72px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--line);
@@ -283,6 +285,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: var(--surface);
 }
 
@@ -367,7 +370,8 @@ button:disabled {
 
 .ticket-list {
   overflow-y: auto;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .ticket {
@@ -451,8 +455,10 @@ button:disabled {
 /* ---------------------------------------------------------------- conversation */
 .conversation {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--chat-canvas);
 }
 
@@ -484,7 +490,14 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.conversation-identity p > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .assigned-to {
@@ -523,7 +536,8 @@ button:disabled {
 }
 
 .messages {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 22px 8%;
   display: flex;
@@ -601,6 +615,7 @@ button:disabled {
 }
 
 .composer {
+  flex: 0 0 auto;
   background: var(--surface);
   border-top: 1px solid var(--line);
   padding: 14px 18px;
@@ -1229,6 +1244,31 @@ button:disabled {
     left: 12px;
     bottom: 74px;
     max-width: none;
+  }
+}
+
+/* Laptops are short more often than they are narrow. Reclaim vertical space so the composer and a
+   useful amount of transcript both stay on screen. */
+@media (max-height: 720px) {
+  .panel-header {
+    min-height: 60px;
+    padding: 10px 16px;
+  }
+
+  .messages {
+    padding: 14px 6%;
+  }
+
+  .composer {
+    padding: 10px 14px;
+  }
+
+  .composer textarea {
+    height: 40px;
+  }
+
+  .sidebar nav {
+    margin-top: 16px;
   }
 }
 
