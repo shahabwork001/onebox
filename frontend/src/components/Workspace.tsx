@@ -176,6 +176,20 @@ export function Workspace() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /**
+   * Switching queue or filter changes which conversations exist, so the previous set has to go before
+   * the next arrives. Without this the unassigned screen rendered the rows from whatever view was open
+   * before, as though they were the queue, until the request came back and replaced them.
+   *
+   * Search is deliberately excluded: it refines the same set, and blanking the list on every debounce
+   * would flicker while someone types.
+   */
+  useEffect(() => {
+    setTickets([]);
+    setTicketTotal(0);
+    setTicketPage(1);
+  }, [scope, status]);
+
   useEffect(() => {
     loadTickets();
   }, [loadTickets]);
