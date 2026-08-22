@@ -46,6 +46,31 @@ export type Message = {
   mediaSizeBytes: number | null;
 };
 
+/**
+ * A message the agent has sent but the server has not yet acknowledged. It renders immediately with a
+ * pending tick so the composer never feels like it swallowed the text, and is replaced by the stored
+ * message on confirmation or marked failed if the send is rejected.
+ */
+export const PENDING_PREFIX = "pending-";
+
+export const isPending = (message: Pick<Message, "id">) => message.id.startsWith(PENDING_PREFIX);
+
+export function draftMessage(conversationId: string, text: string): Message {
+  return {
+    id: `${PENDING_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    conversationId,
+    direction: "Outbound",
+    type: "Text",
+    text,
+    status: "Queued",
+    timestamp: new Date().toISOString(),
+    externalMessageId: null,
+    mimeType: null,
+    mediaReady: false,
+    mediaSizeBytes: null,
+  };
+}
+
 export const hasAttachment = (message: Pick<Message, "type">) =>
   message.type !== "Text" && message.type !== "Unknown";
 

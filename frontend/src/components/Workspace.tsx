@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, refreshSession } from "@/lib/api";
 import { clearSession, readSession, writeSession } from "@/lib/session";
 import { DEFAULT_ROUTE, buildPath, parseRoute } from "@/lib/routing";
 import {
   PERMISSIONS,
+  draftMessage,
   isFullWidthView,
+  isPending,
   type Agent,
   type Auth,
   type Dashboard,
@@ -43,6 +45,7 @@ export function Workspace() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [forbidden, setForbidden] = useState(false);
+  const loadedConversation = useRef<string | null>(null);
 
   const [agents, setAgents] = useState<Agent[]>([]);
   const [composer, setComposer] = useState("");
@@ -165,12 +168,18 @@ export function Workspace() {
       setMessages([]);
       return;
     }
-    setMessagesLoading(true);
+    // A spinner on every refresh made sending look like the chat reloaded. Only a conversation the
+    // agent has not opened yet may blank; anything else updates in place.
+    const firstOpen = loadedConversation.current !== conversationId;
+    if (firstOpen) setMessagesLoading(true);
     setForbidden(false);
     try {
       const history = await api.messages(token, conversationId);
-      // The API returns newest-first for cursor paging; the transcript reads oldest-first.
-      setMessages([...history].reverse());
+      // The API returns newest-first for cursor paging; the transcript reads oldest-first. Anything
+      // still awaiting acknowledgement is kept, so a refresh cannot make a sent message vanish.
+      const stored = [...history].reverse();
+      setMessages(current => [...stored, ...current.filter(isPending)]);
+      loadedConversation.current = conversationId;
     } catch (cause) {
       if (cause instanceof ApiError && cause.isForbidden) {
         setMessages([]);
@@ -192,6 +201,38 @@ export function Workspace() {
     loadMessages();
     if (view === "dashboard") loadDashboard();
   });
+
+  /**
+   * The draft is shown before the request leaves, which is what makes the composer feel immediate,
+   * and the stored message replaces it on confirmation. A rejected send leaves the message visible
+   * and marked failed rather than silently dropping what the agent wrote.
+   */
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!auth || !selected) return;
+      const conversationId = selected.conversationId;
+      const draft = draftMessage(conversationId, text);
+
+      setComposer("");
+      setMessages(current => [...current, draft]);
+
+      try {
+        const sent = await api.sendMessage(auth.accessToken, conversationId, text);
+        setMessages(current => {
+          const settled = current.filter(message => message.id !== draft.id);
+          return settled.some(message => message.id === sent.id) ? settled : [...settled, sent];
+        });
+        // Only the list preview depends on this, so it must not hold up the transcript.
+        loadTickets();
+      } catch (cause) {
+        setMessages(current =>
+          current.map(message => (message.id === draft.id ? { ...message, status: "Failed" } : message)),
+        );
+        report(cause);
+      }
+    },
+    [auth, selected, loadTickets, report],
+  );
 
   const run = useCallback(
     async (action: () => Promise<void>, nextScope?: Scope) => {
@@ -337,12 +378,7 @@ export function Workspace() {
               onRelease: () => selected && run(() => api.release(auth.accessToken, selected.id), "unassigned"),
               onAssign: agentId => selected && run(() => api.assign(auth.accessToken, selected.id, agentId)),
               onChangeStatus: action => selected && run(() => api.changeStatus(auth.accessToken, selected.id, action)),
-              onSend: text =>
-                selected &&
-                run(async () => {
-                  await api.sendMessage(auth.accessToken, selected.conversationId, text);
-                  setComposer("");
-                }),
+              onSend: sendMessage,
             }}
           />
         </>

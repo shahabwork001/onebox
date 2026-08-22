@@ -704,6 +704,11 @@ button:disabled {
   border-top-right-radius: 2px;
 }
 
+/* Unacknowledged, not broken: settle it visually rather than announcing it. */
+.bubble.is-pending {
+  opacity: 0.72;
+}
+
 .message-empty {
   font-style: italic;
   color: var(--ink-subtle);

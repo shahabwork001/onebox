@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef } from "react";
 import type { Agent, Message, Ticket } from "@/lib/types";
-import { hasAttachment, isTerminal, isUnclaimed } from "@/lib/types";
+import { hasAttachment, isPending, isTerminal, isUnclaimed } from "@/lib/types";
 import { dayKeyOf, formatDayHeading, formatTime } from "@/lib/format";
 import { ActionMenu, type MenuAction } from "./ActionMenu";
 import { AssignMenu } from "./AssignMenu";
@@ -50,10 +50,28 @@ export function ConversationPanel({
   actions: ConversationActions;
 }) {
   const bottom = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const composerBox = useRef<HTMLTextAreaElement>(null);
+  const lastConversation = useRef<string | null>(null);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "end" });
+    const switched = lastConversation.current !== (ticket?.id ?? null);
+    lastConversation.current = ticket?.id ?? null;
+
+    // Yanking someone back to the newest message while they are reading history is the classic chat
+    // annoyance, so follow along only when they were already at the bottom.
+    const box = scroller.current;
+    const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+    if (switched || atBottom) bottom.current?.scrollIntoView({ block: "end", behavior: switched ? "auto" : "smooth" });
   }, [messages, ticket?.id]);
+
+  // Grow with the draft up to the CSS max height, as every chat composer does.
+  useEffect(() => {
+    const box = composerBox.current;
+    if (!box) return;
+    box.style.height = "auto";
+    box.style.height = `${Math.min(box.scrollHeight, 140)}px`;
+  }, [composer]);
 
   if (!ticket) {
     return (
@@ -87,7 +105,10 @@ export function ConversationPanel({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (composer.trim()) actions.onSend(composer.trim());
+    if (!composer.trim()) return;
+    actions.onSend(composer.trim());
+    // Sending should never cost the agent their place in the composer.
+    composerBox.current?.focus();
   };
 
   return (
@@ -135,7 +156,7 @@ export function ConversationPanel({
         </div>
       </header>
 
-      <div className="messages">
+      <div className="messages" ref={scroller}>
         {forbidden ? (
           <EmptyState
             icon={<IconLock size={28} />}
@@ -154,6 +175,7 @@ export function ConversationPanel({
 
       <form className="composer" onSubmit={submit}>
         <textarea
+          ref={composerBox}
           value={composer}
           onChange={event => onComposerChange(event.target.value)}
           placeholder={composerPlaceholder}
@@ -189,7 +211,9 @@ function MessageStream({ messages, token }: { messages: Message[]; token: string
         return (
           <div key={message.id} className="message-group">
             {heading && <div className="day-divider">{heading}</div>}
-            <div className={outbound ? "bubble bubble-outbound" : "bubble bubble-inbound"}>
+            <div
+              className={`bubble ${outbound ? "bubble-outbound" : "bubble-inbound"}${isPending(message) ? " is-pending" : ""}`}
+            >
               {hasAttachment(message) && <MediaAttachment message={message} token={token} />}
               {message.text && <p>{message.text}</p>}
               {!message.text && !hasAttachment(message) && <p className="message-empty">No content</p>}
