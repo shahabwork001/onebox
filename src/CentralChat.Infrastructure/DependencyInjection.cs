@@ -20,6 +20,7 @@ public static class DependencyInjection
             .AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<CentralChatDbContext>().AddDefaultTokenProviders();
         services.AddScoped<IAuthService, AuthService>(); services.AddScoped<ITicketService, TicketService>(); services.AddScoped<IConversationService, ConversationService>(); services.AddScoped<IWebhookIngestionService, WebhookIngestionService>();
         services.AddScoped<IDirectoryService, DirectoryService>();
+        services.AddScoped<IDashboardService, DashboardService>();
         services.AddSingleton<RabbitConnection>(); services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();
         var meta = configuration.GetSection(MetaWhatsAppOptions.Section).Get<MetaWhatsAppOptions>() ?? new();
         if (meta.UseDevelopmentClient) services.AddSingleton<IWhatsAppClient, DevelopmentWhatsAppClient>();

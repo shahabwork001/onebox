@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { RealtimeState } from "@/hooks/useRealtime";
-import type { Scope, User } from "@/lib/types";
+import type { User, View } from "@/lib/types";
 import { Avatar } from "./Primitives";
 
 /** Icons carry the rail once labels are hidden on narrow screens, so every queue needs one. */
@@ -21,7 +21,20 @@ const Icon = ({ children }: { children: ReactNode }) => (
   </svg>
 );
 
-const QUEUES: { key: Scope; label: string; hint: string; icon: ReactNode }[] = [
+const QUEUES: { key: View; label: string; hint: string; icon: ReactNode }[] = [
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    hint: "Workspace metrics at a glance",
+    icon: (
+      <Icon>
+        <rect x="3" y="3" width="7" height="9" rx="1" />
+        <rect x="14" y="3" width="7" height="5" rx="1" />
+        <rect x="14" y="12" width="7" height="9" rx="1" />
+        <rect x="3" y="16" width="7" height="5" rx="1" />
+      </Icon>
+    ),
+  },
   {
     key: "mine",
     label: "My inbox",
@@ -64,17 +77,17 @@ const REALTIME_LABEL: Record<RealtimeState, string> = {
 
 export function Sidebar({
   user,
-  scope,
+  view,
   counts,
   realtime,
-  onScopeChange,
+  onViewChange,
   onSignOut,
 }: {
   user: User;
-  scope: Scope;
-  counts: Partial<Record<Scope, number>>;
+  view: View;
+  counts: Partial<Record<View, number>>;
   realtime: RealtimeState;
-  onScopeChange: (scope: Scope) => void;
+  onViewChange: (view: View) => void;
   onSignOut: () => void;
 }) {
   return (
@@ -95,9 +108,9 @@ export function Sidebar({
             key={queue.key}
             type="button"
             title={queue.hint}
-            aria-current={scope === queue.key ? "page" : undefined}
-            className={scope === queue.key ? "nav-item is-active" : "nav-item"}
-            onClick={() => onScopeChange(queue.key)}
+            aria-current={view === queue.key ? "page" : undefined}
+            className={view === queue.key ? "nav-item is-active" : "nav-item"}
+            onClick={() => onViewChange(queue.key)}
           >
             {queue.icon}
             <span className="nav-label">{queue.label}</span>

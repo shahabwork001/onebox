@@ -1,4 +1,4 @@
-import type { Agent, Auth, Contact, Message, Scope, StatusFilter, Ticket } from "./types";
+import type { Agent, Auth, Contact, Dashboard, Message, Scope, StatusFilter, Ticket } from "./types";
 
 /**
  * Empty in production: the reverse proxy serves the app and the API from one origin and forwards
@@ -83,6 +83,8 @@ export const api = {
     }),
 
   agents: (token: string) => send<Agent[]>("/api/users", token),
+
+  dashboard: (token: string) => send<Dashboard>("/api/dashboard", token),
 
   contacts: (token: string) => send<PagedResult<Contact>>("/api/contacts?pageSize=100", token),
 

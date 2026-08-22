@@ -72,6 +72,8 @@ public sealed class CentralChatDbContext(DbContextOptions<CentralChatDbContext> 
         b.Entity<WebhookEvent>().HasIndex(x => x.PayloadHash).IsUnique();
         b.Entity<WebhookEvent>().HasIndex(x => x.ExternalEventId);
         b.Entity<InboxMessage>().HasIndex(x => new { x.Consumer, x.MessageId }).IsUnique();
+        // Shape for the dashboard's aggregate query; it maps to no table of its own.
+        b.Entity<FirstResponseRow>().HasNoKey().ToView(null);
         // The publisher polls for unpublished work every couple of seconds. A partial index keeps that
         // scan proportional to the backlog rather than to the full history of everything ever sent.
         b.Entity<OutboxMessage>().HasIndex(x => x.OccurredAt).HasFilter("\"ProcessedAt\" IS NULL");

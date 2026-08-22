@@ -46,3 +46,9 @@ public interface ICurrentUser
     bool IsAuthenticated { get; }
     bool HasPermission(string permission);
 }
+
+public interface IDashboardService
+{
+    Task<DashboardDto> GetAsync(Guid userId, bool privileged, CancellationToken cancellationToken);
+}
+

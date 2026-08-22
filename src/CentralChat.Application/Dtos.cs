@@ -17,3 +17,18 @@ public record AgentDto(Guid Id, string Email, string DisplayName, bool IsActive,
 public record TeamDto(Guid Id, string Name, int MemberCount);
 public record IngestWebhookResult(Guid EventId, bool Duplicate);
 public record PagedResult<T>(IReadOnlyCollection<T> Items, int Page, int PageSize, int Total);
+
+public record DashboardTotals(
+    int Contacts, int Conversations, int Tickets,
+    int Unassigned, int Open, int Resolved, int Closed,
+    int InboundMessages, int OutboundMessages,
+    double? AvgFirstResponseSeconds);
+
+public record AgentWorkload(
+    Guid AgentId, string DisplayName, string Email,
+    int Claimed, int Open, int Resolved,
+    double? AvgFirstResponseSeconds);
+
+/// <summary>Agent rows are only populated for callers holding <c>tickets.assign</c>.</summary>
+public record DashboardDto(DashboardTotals Totals, IReadOnlyCollection<AgentWorkload> Agents);
+

@@ -63,6 +63,37 @@ export type Contact = {
 /** Inbox queues in the left rail. `all` is the monitoring view for admins and team leads. */
 export type Scope = "mine" | "unassigned" | "all";
 
+/** What the rail is showing. Dashboard and the unassigned queue are full-width screens of their own. */
+export type View = "dashboard" | Scope;
+
+/** Screens that own the full content area rather than splitting into list plus thread. */
+export const isFullWidthView = (view: View) => view === "dashboard" || view === "unassigned";
+
+export type DashboardTotals = {
+  contacts: number;
+  conversations: number;
+  tickets: number;
+  unassigned: number;
+  open: number;
+  resolved: number;
+  closed: number;
+  inboundMessages: number;
+  outboundMessages: number;
+  avgFirstResponseSeconds: number | null;
+};
+
+export type AgentWorkload = {
+  agentId: string;
+  displayName: string;
+  email: string;
+  claimed: number;
+  open: number;
+  resolved: number;
+  avgFirstResponseSeconds: number | null;
+};
+
+export type Dashboard = { totals: DashboardTotals; agents: AgentWorkload[] };
+
 /** Status filter chips above the conversation list. */
 export type StatusFilter = "active" | "new" | "open" | "pending" | "resolved" | "closed" | "all";
 

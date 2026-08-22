@@ -3,18 +3,34 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api, refreshSession } from "@/lib/api";
 import { clearSession, readSession, writeSession } from "@/lib/session";
-import { PERMISSIONS, type Agent, type Auth, type Message, type Scope, type StatusFilter, type Ticket } from "@/lib/types";
+import {
+  PERMISSIONS,
+  isFullWidthView,
+  type Agent,
+  type Auth,
+  type Dashboard,
+  type Message,
+  type Scope,
+  type StatusFilter,
+  type Ticket,
+  type View,
+} from "@/lib/types";
 import { useRealtime } from "@/hooks/useRealtime";
 import { LoginView } from "@/components/LoginView";
 import { Sidebar } from "@/components/Sidebar";
 import { InboxPanel } from "@/components/InboxPanel";
 import { ConversationPanel } from "@/components/ConversationPanel";
+import { DashboardView } from "@/components/DashboardView";
+import { QueueTable } from "@/components/QueueTable";
 
 export default function Workspace() {
   const [auth, setAuth] = useState<Auth | null>(null);
   const [ready, setReady] = useState(false);
 
-  const [scope, setScope] = useState<Scope>("mine");
+  const [view, setView] = useState<View>("dashboard");
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusFilter>("active");
   const [search, setSearch] = useState("");
 
@@ -32,6 +48,8 @@ export default function Workspace() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // The dashboard has no ticket list of its own; it borrows "mine" so the rail counts stay warm.
+  const scope: Scope = view === "dashboard" ? "mine" : view;
   const token = auth?.accessToken;
   const canAssign = !!auth?.user.permissions.includes(PERMISSIONS.ticketsAssign);
 
@@ -44,6 +62,7 @@ export default function Workspace() {
     clearSession();
     setAuth(null);
     setTickets([]);
+    setDashboard(null);
     setMessages([]);
     setSelectedId(null);
   }, []);
@@ -105,6 +124,22 @@ export default function Workspace() {
     api.agents(token).then(setAgents).catch(() => setAgents([]));
   }, [token, canAssign]);
 
+  const loadDashboard = useCallback(async () => {
+    if (!token) return;
+    setDashboardLoading(true);
+    try {
+      setDashboard(await api.dashboard(token));
+    } catch (cause) {
+      report(cause);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [token, report]);
+
+  useEffect(() => {
+    if (view === "dashboard") loadDashboard();
+  }, [view, loadDashboard]);
+
   const selected = useMemo(() => tickets.find(ticket => ticket.id === selectedId) ?? null, [tickets, selectedId]);
   const conversationId = selected?.conversationId;
 
@@ -138,6 +173,7 @@ export default function Workspace() {
   const realtime = useRealtime(token, () => {
     loadTickets();
     loadMessages();
+    if (view === "dashboard") loadDashboard();
   });
 
   const run = useCallback(
@@ -145,7 +181,7 @@ export default function Workspace() {
       setBusy(true);
       try {
         await action();
-        if (nextScope) setScope(nextScope);
+        if (nextScope) setView(nextScope);
         await loadTickets();
         await loadMessages();
       } catch (cause) {
@@ -191,64 +227,108 @@ export default function Workspace() {
 
   const isOwner = !!selected && selected.assignedAgentId === auth.user.id;
 
+  const claimFromQueue = async (ticket: Ticket) => {
+    setClaimingId(ticket.id);
+    try {
+      await api.claim(auth.accessToken, ticket.id);
+      // Taking a conversation means answering it, so land the agent in it rather than back on a list.
+      setView("mine");
+      setSelectedId(ticket.id);
+      await loadTickets();
+    } catch (cause) {
+      report(cause);
+      await loadTickets();
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
+  const fullWidth = isFullWidthView(view);
+
   return (
-    // `has-selection` drives which single pane is visible once the layout collapses to one column.
-    <main className={selected ? "workspace has-selection" : "workspace"}>
+    <main
+      className={`workspace ${fullWidth ? "view-full" : "view-split"}${selected && !fullWidth ? " has-selection" : ""}`}
+    >
       <Sidebar
         user={auth.user}
-        scope={scope}
+        view={view}
         counts={{ unassigned: unassignedCount }}
         realtime={realtime}
-        onScopeChange={next => {
-          setScope(next);
+        onViewChange={next => {
+          setView(next);
           setSelectedId(null);
         }}
         onSignOut={signOut}
       />
 
-      <InboxPanel
-        scope={scope}
-        status={status}
-        tickets={visibleTickets}
-        search={search}
-        loading={ticketsLoading}
-        selectedId={selectedId}
-        agentNameOf={agentNameOf}
-        onStatusChange={next => {
-          setStatus(next);
-          setSelectedId(null);
-        }}
-        onSearchChange={setSearch}
-        onSelect={ticket => setSelectedId(ticket.id)}
-        onRefresh={loadTickets}
-      />
+      {view === "dashboard" ? (
+        <DashboardView
+          data={dashboard}
+          loading={dashboardLoading}
+          displayName={auth.user.displayName}
+          canSeeAgents={canAssign}
+          onOpenQueue={() => setView("unassigned")}
+          onRefresh={loadDashboard}
+        />
+      ) : view === "unassigned" ? (
+        <QueueTable
+          tickets={visibleTickets}
+          loading={ticketsLoading}
+          busyId={claimingId}
+          onClaim={claimFromQueue}
+          onOpen={ticket => {
+            setView("all");
+            setSelectedId(ticket.id);
+          }}
+          onRefresh={loadTickets}
+        />
+      ) : (
+        <>
+          <InboxPanel
+            scope={scope}
+            status={status}
+            tickets={visibleTickets}
+            search={search}
+            loading={ticketsLoading}
+            selectedId={selectedId}
+            agentNameOf={agentNameOf}
+            onStatusChange={next => {
+              setStatus(next);
+              setSelectedId(null);
+            }}
+            onSearchChange={setSearch}
+            onSelect={ticket => setSelectedId(ticket.id)}
+            onRefresh={loadTickets}
+          />
 
-      <ConversationPanel
-        ticket={selected}
-        messages={messages}
-        agents={agents}
-        ownerName={agentNameOf(selected?.assignedAgentId ?? null)}
-        loading={messagesLoading}
-        forbidden={forbidden}
-        busy={busy}
-        canAssign={canAssign}
-        isOwner={isOwner}
-        composer={composer}
-        onComposerChange={setComposer}
-        onBack={() => setSelectedId(null)}
-        actions={{
-          onClaim: () => selected && run(() => api.claim(auth.accessToken, selected.id), "mine"),
-          onRelease: () => selected && run(() => api.release(auth.accessToken, selected.id), "unassigned"),
-          onAssign: agentId => selected && run(() => api.assign(auth.accessToken, selected.id, agentId)),
-          onChangeStatus: action => selected && run(() => api.changeStatus(auth.accessToken, selected.id, action)),
-          onSend: text =>
-            selected &&
-            run(async () => {
-              await api.sendMessage(auth.accessToken, selected.conversationId, text);
-              setComposer("");
-            }),
-        }}
-      />
+          <ConversationPanel
+            ticket={selected}
+            messages={messages}
+            agents={agents}
+            ownerName={agentNameOf(selected?.assignedAgentId ?? null)}
+            loading={messagesLoading}
+            forbidden={forbidden}
+            busy={busy}
+            canAssign={canAssign}
+            isOwner={isOwner}
+            composer={composer}
+            onComposerChange={setComposer}
+            onBack={() => setSelectedId(null)}
+            actions={{
+              onClaim: () => selected && run(() => api.claim(auth.accessToken, selected.id), "mine"),
+              onRelease: () => selected && run(() => api.release(auth.accessToken, selected.id), "unassigned"),
+              onAssign: agentId => selected && run(() => api.assign(auth.accessToken, selected.id, agentId)),
+              onChangeStatus: action => selected && run(() => api.changeStatus(auth.accessToken, selected.id, action)),
+              onSend: text =>
+                selected &&
+                run(async () => {
+                  await api.sendMessage(auth.accessToken, selected.conversationId, text);
+                  setComposer("");
+                }),
+            }}
+          />
+        </>
+      )}
 
       {error && (
         <button type="button" className="toast" onClick={() => setError("")} role="alert">
