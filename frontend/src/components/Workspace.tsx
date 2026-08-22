@@ -9,6 +9,7 @@ import {
   draftMessage,
   isFullWidthView,
   isPending,
+  isTerminal,
   matchesView,
   type Agent,
   type Auth,
@@ -20,6 +21,7 @@ import {
   type View,
 } from "@/lib/types";
 import { useRealtime, type RealtimeSignal } from "@/hooks/useRealtime";
+import { useNotifications, useTitleBadge } from "@/hooks/useNotifications";
 import { LoginView } from "./LoginView";
 import { Sidebar } from "./Sidebar";
 import { InboxPanel } from "./InboxPanel";
@@ -65,12 +67,25 @@ export function Workspace() {
   const [composer, setComposer] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [unseen, setUnseen] = useState(0);
 
   // The dashboard has no ticket list of its own; it borrows "mine" so the rail counts stay warm.
   const scope: Scope = view === "dashboard" || view === "team" ? "mine" : view;
   const token = auth?.accessToken;
   const canAssign = !!auth?.user.permissions.includes(PERMISSIONS.ticketsAssign);
   const canManageUsers = !!auth?.user.permissions.includes(PERMISSIONS.usersManage);
+
+  const alerts = useNotifications();
+  useTitleBadge(unseen);
+
+  // Anything the agent can already see does not need announcing. Reading the open conversation, or
+  // simply having the window in front of them, is what clears the count.
+  useEffect(() => {
+    const clear = () => setUnseen(0);
+    window.addEventListener("focus", clear);
+    document.addEventListener("visibilitychange", () => !document.hidden && clear());
+    return () => window.removeEventListener("focus", clear);
+  }, []);
 
   useEffect(() => {
     const applyUrl = () => {
@@ -331,6 +346,9 @@ export function Workspace() {
     [auth, scope, status, appliedSearch],
   );
 
+  // One alert per conversation per burst: three messages arriving together are one interruption.
+  const notified = useRef<string | null>(null);
+
   const onRealtime = useCallback(
     (event: RealtimeSignal, payload: unknown) => {
       if (event === "resync") {
@@ -341,6 +359,26 @@ export function Workspace() {
       if (event === "ticket.upserted") {
         const ticket = payload as Ticket;
         applyTicket(ticket);
+
+        // A conversation nobody owns is everyone's to take, so every agent hears about it. One that is
+        // already assigned concerns only the agent holding it.
+        const mine = ticket.assignedAgentId === auth?.user.id;
+        const unclaimed = !ticket.assignedAgentId && !isTerminal(ticket);
+        const alreadyOpen = ticket.id === selectedId && !document.hidden;
+
+        if ((unclaimed || mine) && !alreadyOpen && ticket.id !== notified.current) {
+          notified.current = ticket.id;
+          setUnseen(count => count + 1);
+          alerts.notify({
+            title: unclaimed ? "New conversation waiting" : `${ticket.contactName || ticket.phoneNumber}`,
+            body: ticket.lastMessage ?? "New message",
+            tag: ticket.id,
+            onClick: () => {
+              setView(unclaimed ? "unassigned" : "mine");
+              setSelectedId(ticket.id);
+            },
+          });
+        }
         // The queue badge is a count the payload cannot supply, so let it settle on the next pass.
         reconcile();
         return;
@@ -367,7 +405,7 @@ export function Workspace() {
         return [...current, message];
       });
     },
-    [applyTicket, conversationId, reconcile],
+    [applyTicket, conversationId, reconcile, auth?.user.id, selectedId, alerts],
   );
 
   const realtime = useRealtime(token, onRealtime);
@@ -438,6 +476,7 @@ export function Workspace() {
       const draft = draftMessage(conversationId, text);
 
       setComposer("");
+      setUnseen(0);
       setMessages(current => [...current, draft]);
 
       try {
@@ -535,6 +574,7 @@ export function Workspace() {
           setSelectedId(null);
         }}
         onSignOut={signOut}
+        alerts={alerts}
       />
 
       {view === "dashboard" ? (

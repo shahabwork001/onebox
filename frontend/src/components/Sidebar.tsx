@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { IconChat, IconClock, IconDashboard, IconInbox, IconSignOut, IconTeam } from "./icons";
+import { IconBell, IconBellOff, IconChat, IconClock, IconDashboard, IconInbox, IconSignOut, IconTeam } from "./icons";
 import type { RealtimeState } from "@/hooks/useRealtime";
 import type { User, View } from "@/lib/types";
 import { Avatar } from "./Primitives";
@@ -53,6 +53,7 @@ export function Sidebar({
   realtime,
   onViewChange,
   onSignOut,
+  alerts,
 }: {
   user: User;
   view: View;
@@ -61,6 +62,12 @@ export function Sidebar({
   realtime: RealtimeState;
   onViewChange: (view: View) => void;
   onSignOut: () => void;
+  alerts: {
+    preferences: { desktop: boolean; sound: boolean };
+    permission: NotificationPermission;
+    update: (next: { desktop?: boolean; sound?: boolean }) => void;
+    requestPermission: () => Promise<NotificationPermission>;
+  };
 }) {
   return (
     <aside className="sidebar">
@@ -90,6 +97,28 @@ export function Sidebar({
           </button>
         ))}
       </nav>
+
+      {/* Permission can only be asked for from a real gesture, so it is offered rather than demanded. */}
+      <button
+        type="button"
+        className="rail-toggle"
+        title={
+          alerts.permission === "denied"
+            ? "Notifications are blocked in your browser settings"
+            : alerts.preferences.desktop
+              ? "Alerts on — click to mute"
+              : "Alerts muted — click to turn on"
+        }
+        onClick={async () => {
+          if (!alerts.preferences.desktop && alerts.permission !== "granted") await alerts.requestPermission();
+          alerts.update({ desktop: !alerts.preferences.desktop, sound: !alerts.preferences.desktop });
+        }}
+      >
+        {alerts.preferences.desktop && alerts.permission !== "denied" ? <IconBell size={17} /> : <IconBellOff size={17} />}
+        <span className="nav-label">
+          {alerts.permission === "denied" ? "Alerts blocked" : alerts.preferences.desktop ? "Alerts on" : "Alerts off"}
+        </span>
+      </button>
 
       <div className={`realtime realtime-${realtime}`} title={`Realtime connection: ${REALTIME_LABEL[realtime]}`}>
         <span className="realtime-dot" aria-hidden="true" />

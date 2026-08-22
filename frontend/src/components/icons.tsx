@@ -152,3 +152,19 @@ export const IconAttach = (p: IconProps) => (
   </Glyph>
 );
 
+export const IconBell = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M18 9a6 6 0 0 0-12 0c0 6-2 7-2 7h16s-2-1-2-7" />
+    <path d="M13.7 20a2 2 0 0 1-3.4 0" />
+  </Glyph>
+);
+
+export const IconBellOff = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M9.5 4.2A6 6 0 0 1 18 9c0 2.2.3 3.8.7 4.9" />
+    <path d="M5.3 7.7A6 6 0 0 0 6 9c0 6-2 7-2 7h13" />
+    <path d="M13.7 20a2 2 0 0 1-3.4 0" />
+    <path d="M3 3l18 18" />
+  </Glyph>
+);
+

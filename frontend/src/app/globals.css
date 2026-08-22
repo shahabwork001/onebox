@@ -282,6 +282,31 @@ button:disabled {
   text-align: center;
 }
 
+.rail-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--rail-text);
+  font-size: 13px;
+  text-align: left;
+}
+
+.rail-toggle:hover {
+  background: var(--rail-hover);
+  color: var(--rail-text-strong);
+}
+
+/* The connection line sits directly under the toggle, so only one of them claims the spare space. */
+.rail-toggle + .realtime {
+  margin-top: 0;
+}
+
 .realtime {
   margin-top: auto;
   display: flex;
