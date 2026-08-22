@@ -35,6 +35,7 @@
   --info-soft: #eef4fb;
 
   /* Geometry — restrained radii read as a tool, generous ones read as a toy. */
+  --control-height: 34px;
   --radius: 6px;
   --radius-lg: 8px;
   --shadow-sm: 0 1px 1px rgb(22 25 29 / 4%);
@@ -368,14 +369,21 @@ button:disabled {
 }
 
 .icon-button {
-  margin-left: auto;
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: var(--radius);
-  width: 34px;
-  height: 34px;
+  width: var(--control-height);
+  height: var(--control-height);
   color: var(--ink-muted);
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+}
+
+/* Only the refresh control at the end of a panel header pushes right. Inside an action group an
+   icon button must sit with its neighbours, not float away from them. */
+.panel-header > .icon-button {
+  margin-left: auto;
 }
 
 .icon-button:hover {
@@ -758,7 +766,8 @@ button:disabled {
 /* ---------------------------------------------------------------- buttons */
 .button {
   border-radius: var(--radius);
-  padding: 7px 13px;
+  height: var(--control-height);
+  padding: 0 13px;
   font-size: 13px;
   font-weight: 500;
   border: 1px solid transparent;
@@ -772,7 +781,7 @@ button:disabled {
 
 .composer-send {
   height: 38px;
-  padding: 0 16px;
+  padding: 0 15px;
 }
 
 .button-primary {
