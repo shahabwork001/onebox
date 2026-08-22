@@ -1,4 +1,5 @@
 using CentralChat.Application;
+using CentralChat.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,11 +13,26 @@ public sealed class DirectoryService(CentralChatDbContext db, UserManager<Applic
         var query = db.Contacts.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); query = query.Where(x => EF.Functions.ILike(x.DisplayName, $"%{term}%") || x.PhoneNumber.Contains(term)); }
         var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.LastMessageAt).Skip((page - 1) * pageSize).Take(pageSize).Select(x => new ContactDto(x.Id, x.DisplayName, x.PhoneNumber, x.WhatsAppUserId, x.CurrentAssignedAgentId, x.LastMessageAt, x.Status)).ToListAsync(ct);
+        var items = await query.OrderByDescending(x => x.LastMessageAt).Skip((page - 1) * pageSize).Take(pageSize).Select(x => new ContactDto(x.Id, x.DisplayName, x.PhoneNumber, x.WhatsAppUserId, x.CurrentAssignedAgentId, x.LastMessageAt, x.Status, x.MarketingOptOut)).ToListAsync(ct);
         return new(items, page, pageSize, total);
     }
 
-    public async Task<ContactDto> ContactAsync(Guid id, CancellationToken ct) => await db.Contacts.AsNoTracking().Where(x => x.Id == id).Select(x => new ContactDto(x.Id, x.DisplayName, x.PhoneNumber, x.WhatsAppUserId, x.CurrentAssignedAgentId, x.LastMessageAt, x.Status)).SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Contact not found.");
+    public async Task<ContactDto> ContactAsync(Guid id, CancellationToken ct) => await db.Contacts.AsNoTracking().Where(x => x.Id == id).Select(x => new ContactDto(x.Id, x.DisplayName, x.PhoneNumber, x.WhatsAppUserId, x.CurrentAssignedAgentId, x.LastMessageAt, x.Status, x.MarketingOptOut)).SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Contact not found.");
+
+    public async Task<ContactDto> SetMarketingOptOutAsync(Guid contactId, bool optedOut, Guid actingUserId, CancellationToken ct)
+    {
+        var contact = await db.Contacts.SingleOrDefaultAsync(x => x.Id == contactId, ct) ?? throw new NotFoundException("Contact not found.");
+        contact.SetMarketingOptOut(optedOut);
+        db.AuditLogs.Add(new AuditLog
+        {
+            UserId = actingUserId,
+            Action = optedOut ? "contact.marketing.optout" : "contact.marketing.optin",
+            EntityType = "Contact",
+            EntityId = contactId.ToString(),
+        });
+        await db.SaveChangesAsync(ct);
+        return new(contact.Id, contact.DisplayName, contact.PhoneNumber, contact.WhatsAppUserId, contact.CurrentAssignedAgentId, contact.LastMessageAt, contact.Status, contact.MarketingOptOut);
+    }
 
     public async Task<IReadOnlyCollection<AgentDto>> UsersAsync(bool includeInactive, CancellationToken ct)
     {

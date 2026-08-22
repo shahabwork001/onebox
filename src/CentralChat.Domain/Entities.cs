@@ -34,7 +34,22 @@ public sealed class Contact : Entity
     public string Source { get; private set; } = "WhatsApp";
     public ContactStatus Status { get; private set; } = ContactStatus.Active;
     public Guid? CurrentAssignedAgentId { get; private set; }
+
+    /// <summary>
+    /// Marketing consent is tracked separately from contact status, because someone who no longer wants
+    /// promotions is still a customer whose support messages must be answered.
+    /// </summary>
+    public bool MarketingOptOut { get; private set; }
+    public DateTimeOffset? MarketingOptOutAt { get; private set; }
     public DateTimeOffset? LastMessageAt { get; private set; }
+    public void SetMarketingOptOut(bool optedOut)
+    {
+        if (MarketingOptOut == optedOut) return;
+        MarketingOptOut = optedOut;
+        MarketingOptOutAt = optedOut ? DateTimeOffset.UtcNow : null;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     public void Assign(Guid? agentId) { CurrentAssignedAgentId = agentId; UpdatedAt = DateTimeOffset.UtcNow; }
     public void Touch(DateTimeOffset timestamp) { LastMessageAt = timestamp; UpdatedAt = DateTimeOffset.UtcNow; }
 }

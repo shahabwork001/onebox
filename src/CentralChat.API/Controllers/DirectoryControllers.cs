@@ -6,10 +6,14 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace CentralChat.API.Controllers;
 
 [ApiController, Route("api/contacts"), Authorize(Policy = Permissions.ContactsView), EnableRateLimiting("api")]
-public sealed class ContactsController(IDirectoryService directory) : ControllerBase
+public sealed class ContactsController(IDirectoryService directory, ICurrentUser current) : ControllerBase
 {
     [HttpGet] public Task<PagedResult<ContactDto>> List([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 30, CancellationToken ct = default) => directory.ContactsAsync(search, page, pageSize, ct);
     [HttpGet("{id:guid}")] public Task<ContactDto> Get(Guid id, CancellationToken ct) => directory.ContactAsync(id, ct);
+
+    [HttpPost("{id:guid}/marketing"), Authorize(Policy = Permissions.SettingsManage)]
+    public Task<ContactDto> SetMarketingOptOut(Guid id, SetOptOutRequest request, CancellationToken ct) =>
+        directory.SetMarketingOptOutAsync(id, request.OptedOut, current.Id, ct);
 }
 
 [ApiController, Route("api/users"), Authorize(Policy = Permissions.TicketsAssign), EnableRateLimiting("api")]

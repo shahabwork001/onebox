@@ -12,7 +12,7 @@ public record MessageDto(Guid Id, Guid ConversationId, MessageDirection Directio
 public record SendMessageRequest(string Text);
 public record AssignTicketRequest(Guid AgentId, string? Reason);
 public record TicketStatusChangeRequest(string? Reason);
-public record ContactDto(Guid Id, string DisplayName, string PhoneNumber, string? WhatsAppUserId, Guid? AssignedAgentId, DateTimeOffset? LastMessageAt, ContactStatus Status);
+public record ContactDto(Guid Id, string DisplayName, string PhoneNumber, string? WhatsAppUserId, Guid? AssignedAgentId, DateTimeOffset? LastMessageAt, ContactStatus Status, bool MarketingOptOut = false);
 public record AgentDto(Guid Id, string Email, string DisplayName, bool IsActive, IReadOnlyCollection<string> Roles);
 public record TeamDto(Guid Id, string Name, int MemberCount);
 public record IngestWebhookResult(Guid EventId, bool Duplicate);
@@ -39,3 +39,17 @@ public record UpdateUserRequest(string? DisplayName, string? Role, bool? IsActiv
 public record SetPasswordRequest(string Password);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
+public record TemplateDto(string Name, string Language, string Category, string Status, string? Body, int VariableCount, bool Usable);
+
+/// <summary>Why a contact is not reachable matters more than the headline number when a send looks small.</summary>
+public record CampaignAudienceDto(int Contacts, int OptedOut, int Inactive, int Eligible);
+
+public record CampaignDto(
+    Guid Id, string Name, string TemplateName, string TemplateLanguage,
+    CampaignStatus Status, int TotalRecipients,
+    int Pending, int Sent, int Delivered, int Read, int Failed, int Skipped,
+    DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt, string? FailureReason);
+
+public record CreateCampaignRequest(string Name, string TemplateName, string TemplateLanguage, IReadOnlyList<string>? Variables);
+public record StartCampaignRequest(IReadOnlyList<string>? Variables);
+public record SetOptOutRequest(bool OptedOut);

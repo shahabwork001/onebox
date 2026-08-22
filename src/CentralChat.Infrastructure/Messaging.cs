@@ -99,6 +99,7 @@ public sealed class RabbitConsumer(IServiceScopeFactory scopes, RabbitConnection
                 await scope.ServiceProvider.GetRequiredService<CentralChat.Application.IWebhookIngestionService>().ProcessAsync(id, ct);
             }
             else if (envelope.Type == "OutboundWhatsAppMessageRequested") await ProcessOutboundAsync(scope.ServiceProvider, envelope.Payload, ct);
+            else if (envelope.Type == "CampaignMessageRequested") await ProcessCampaignMessageAsync(scope.ServiceProvider, envelope.Payload, ct);
             else if (envelope.Type == "WhatsAppMediaDownloadRequested")
             {
                 using var payload = JsonDocument.Parse(envelope.Payload); var messageId = payload.RootElement.GetProperty("MessageId").GetGuid();
@@ -112,6 +113,64 @@ public sealed class RabbitConsumer(IServiceScopeFactory scopes, RabbitConnection
             logger.LogError(ex, "Integration message {DeliveryTag} failed", delivery.DeliveryTag);
             _channel!.BasicNack(delivery.DeliveryTag, false, requeue: !delivery.Redelivered);
         }
+    }
+
+    /// <summary>
+    /// One queued message per recipient, which is what makes a broadcast resumable: a pause stops the
+    /// remainder without unpicking what already went, and a redelivery cannot send twice because the
+    /// recipient row has already left Pending.
+    ///
+    /// Consent is re-checked here rather than trusted from launch. A large send takes time, and someone
+    /// who opts out while it runs must not still receive it.
+    /// </summary>
+    private static async Task ProcessCampaignMessageAsync(IServiceProvider services, string payload, CancellationToken ct)
+    {
+        using var json = JsonDocument.Parse(payload);
+        var recipientId = json.RootElement.GetProperty("RecipientId").GetGuid();
+        var variables = json.RootElement.TryGetProperty("Variables", out var v) && v.ValueKind == JsonValueKind.Array
+            ? v.EnumerateArray().Select(x => x.GetString() ?? string.Empty).ToList()
+            : [];
+
+        var db = services.GetRequiredService<CentralChatDbContext>();
+        var recipient = await db.CampaignRecipients.SingleOrDefaultAsync(x => x.Id == recipientId, ct);
+        if (recipient is null || recipient.Status != CampaignRecipientStatus.Pending) return;
+
+        var campaign = await db.Campaigns.SingleOrDefaultAsync(x => x.Id == recipient.CampaignId, ct);
+        if (campaign is null) return;
+
+        // Paused means paused. Leaving the row pending is what lets a resume pick it up again later.
+        if (campaign.Status == CampaignStatus.Paused) throw new InvalidOperationException($"Campaign {campaign.Id} is paused.");
+        if (campaign.Status is CampaignStatus.Completed or CampaignStatus.Failed) return;
+
+        var contact = await db.Contacts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == recipient.ContactId, ct);
+        if (contact is null || contact.MarketingOptOut || contact.Status != ContactStatus.Active)
+        {
+            recipient.Skip(contact is null ? "Contact no longer exists." : "Contact opted out or is inactive.");
+            await db.SaveChangesAsync(ct);
+            await CompleteCampaignIfDrainedAsync(db, campaign, ct);
+            return;
+        }
+
+        var channel = await db.WhatsAppChannels.AsNoTracking().FirstOrDefaultAsync(ct);
+        if (channel is null) { recipient.MarkFailed("No WhatsApp channel is configured."); await db.SaveChangesAsync(ct); return; }
+
+        var client = services.GetRequiredService<IWhatsAppClient>();
+        var result = await client.SendTemplateAsync(channel.PhoneNumberId, recipient.PhoneNumber, campaign.TemplateName, campaign.TemplateLanguage, variables, ct);
+
+        if (result.Success && result.ExternalMessageId is not null) recipient.MarkSent(result.ExternalMessageId);
+        else recipient.MarkFailed(result.Error ?? "Unknown provider failure.");
+
+        await db.SaveChangesAsync(ct);
+        await CompleteCampaignIfDrainedAsync(db, campaign, ct);
+    }
+
+    private static async Task CompleteCampaignIfDrainedAsync(CentralChatDbContext db, Campaign campaign, CancellationToken ct)
+    {
+        if (campaign.Status != CampaignStatus.Sending) return;
+        var pending = await db.CampaignRecipients.CountAsync(x => x.CampaignId == campaign.Id && x.Status == CampaignRecipientStatus.Pending, ct);
+        if (pending > 0) return;
+        campaign.Complete();
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task ProcessOutboundAsync(IServiceProvider services, string payload, CancellationToken ct)

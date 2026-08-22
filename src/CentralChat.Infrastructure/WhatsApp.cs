@@ -102,6 +102,9 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
                         var ticket = await ResolveTicketAsync(resolved, contact, conversation, ct);
                         var timestamp = ParseTimestamp(incoming);
                         var content = ExtractContent(incoming);
+                        // Meta expects opt-out keywords to be honoured automatically, and a number that
+                        // keeps marketing to someone who said stop is a number that gets blocked.
+                        if (IsOptOutKeyword(content.Text)) contact.SetMarketingOptOut(true);
                         var message = new ChatMessage(conversation.Id, contact.Id, channel.Id, MessageDirection.Inbound, content.Type, content.Text, externalId, timestamp);
                         // The binary is fetched by a queued job so the message is readable at once and a
                         // failing download retries on its own instead of failing the whole webhook.
@@ -198,6 +201,12 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
         foreach (var c in contacts.EnumerateArray()) { var id = c.TryGetProperty("wa_id", out var wa) ? wa.GetString() : null; var name = c.TryGetProperty("profile", out var p) && p.TryGetProperty("name", out var n) ? n.GetString() : null; if (id is not null) result[id] = name; }
         return result;
     }
+    private static readonly HashSet<string> OptOutKeywords =
+        new(StringComparer.OrdinalIgnoreCase) { "stop", "unsubscribe", "cancel", "end", "quit", "optout", "opt out" };
+
+    private static bool IsOptOutKeyword(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && OptOutKeywords.Contains(text.Trim().Trim('.', '!').ToLowerInvariant());
+
     private sealed record IncomingContent(MessageType Type, string? Text, string? MediaId, string? MimeType);
 
     /// <summary>
@@ -231,6 +240,12 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
 public record WhatsAppSendResult(bool Success, string? ExternalMessageId, string? Error);
 public record WhatsAppMedia(byte[] Content, string? MimeType);
 
+/// <summary>
+/// An approved template as Meta describes it. Marketing may only be sent this way, and a template that
+/// is not APPROVED cannot be used, so status travels with the name rather than being assumed.
+/// </summary>
+public record WhatsAppTemplate(string Name, string Language, string Category, string Status, string? Body, int VariableCount);
+
 public interface IWhatsAppClient
 {
     Task<WhatsAppSendResult> SendTextAsync(string phoneNumberId, string recipient, string text, CancellationToken cancellationToken);
@@ -240,9 +255,14 @@ public interface IWhatsAppClient
 
     /// <summary>Uploads the binary, then sends a message referring to it by the id Meta returns.</summary>
     Task<WhatsAppSendResult> SendMediaAsync(string phoneNumberId, string recipient, Stream content, string mimeType, string fileName, MessageType kind, string? caption, CancellationToken cancellationToken);
+
+    /// <summary>Templates live on the business account, not the phone number, and are approved by Meta.</summary>
+    Task<IReadOnlyCollection<WhatsAppTemplate>> ListTemplatesAsync(CancellationToken cancellationToken);
+
+    Task<WhatsAppSendResult> SendTemplateAsync(string phoneNumberId, string recipient, string templateName, string language, IReadOnlyList<string> variables, CancellationToken cancellationToken);
 }
 
-public sealed class MetaWhatsAppClient(HttpClient http, IOptions<MetaWhatsAppOptions> options) : IWhatsAppClient
+public sealed partial class MetaWhatsAppClient(HttpClient http, IOptions<MetaWhatsAppOptions> options) : IWhatsAppClient
 {
     private readonly MetaWhatsAppOptions _options = options.Value;
     public async Task<WhatsAppSendResult> SendTextAsync(string phoneNumberId, string recipient, string text, CancellationToken ct)
@@ -303,6 +323,76 @@ public sealed class MetaWhatsAppClient(HttpClient http, IOptions<MetaWhatsAppOpt
         return new(messageId is not null, messageId, messageId is null ? "Meta response did not contain a message id." : null);
     }
 
+    public async Task<IReadOnlyCollection<WhatsAppTemplate>> ListTemplatesAsync(CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(_options.BusinessAccountId))
+            throw new ValidationException("MetaWhatsApp:BusinessAccountId is not configured, so templates cannot be listed.");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_options.ApiVersion}/{_options.BusinessAccountId}/message_templates?limit=200");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
+        using var response = await http.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new ValidationException($"Meta rejected the template request ({(int)response.StatusCode}): {body[..Math.Min(body.Length, 300)]}");
+
+        using var document = JsonDocument.Parse(body);
+        var templates = new List<WhatsAppTemplate>();
+        if (!document.RootElement.TryGetProperty("data", out var data)) return templates;
+
+        foreach (var template in data.EnumerateArray())
+        {
+            var name = template.GetProperty("name").GetString() ?? "";
+            var language = template.TryGetProperty("language", out var l) ? l.GetString() ?? "en" : "en";
+            var category = template.TryGetProperty("category", out var c) ? c.GetString() ?? "" : "";
+            var status = template.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+
+            // The body component carries the text and its placeholders, which the caller has to fill.
+            string? bodyText = null;
+            if (template.TryGetProperty("components", out var components))
+            {
+                foreach (var component in components.EnumerateArray())
+                {
+                    if (component.TryGetProperty("type", out var t) && string.Equals(t.GetString(), "BODY", StringComparison.OrdinalIgnoreCase))
+                        bodyText = component.TryGetProperty("text", out var text) ? text.GetString() : null;
+                }
+            }
+
+            var variables = bodyText is null ? 0 : TemplateVariables().Matches(bodyText).Count;
+            templates.Add(new WhatsAppTemplate(name, language, category, status, bodyText, variables));
+        }
+        return templates;
+    }
+
+    public async Task<WhatsAppSendResult> SendTemplateAsync(string phoneNumberId, string recipient, string templateName, string language, IReadOnlyList<string> variables, CancellationToken ct)
+    {
+        object template = variables.Count == 0
+            ? new { name = templateName, language = new { code = language } }
+            : new
+            {
+                name = templateName,
+                language = new { code = language },
+                components = new[]
+                {
+                    new { type = "body", parameters = variables.Select(v => new { type = "text", text = v }).ToArray() },
+                },
+            };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.ApiVersion}/{phoneNumberId}/messages");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
+        request.Content = JsonContent.Create(new { messaging_product = "whatsapp", to = recipient.TrimStart('+'), type = "template", template });
+
+        using var response = await http.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode) return new(false, null, $"Meta returned {(int)response.StatusCode}: {body[..Math.Min(body.Length, 400)]}");
+
+        using var document = JsonDocument.Parse(body);
+        var id = document.RootElement.TryGetProperty("messages", out var messages) && messages.GetArrayLength() > 0 ? messages[0].GetProperty("id").GetString() : null;
+        return new(id is not null, id, id is null ? "Meta response did not contain a message id." : null);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\{\{\s*\d+\s*\}\}")]
+    private static partial System.Text.RegularExpressions.Regex TemplateVariables();
+
     private static string MediaTypeName(MessageType kind) => kind switch
     {
         MessageType.Image => "image",
@@ -345,5 +435,17 @@ public sealed class DevelopmentWhatsAppClient : IWhatsAppClient
     public Task<WhatsAppMedia?> DownloadMediaAsync(string mediaId, CancellationToken ct) => Task.FromResult<WhatsAppMedia?>(new(Placeholder, "image/png"));
 
     public Task<WhatsAppSendResult> SendMediaAsync(string phoneNumberId, string recipient, Stream content, string mimeType, string fileName, MessageType kind, string? caption, CancellationToken ct)
+        => Task.FromResult(new WhatsAppSendResult(true, $"dev-{Guid.NewGuid():N}", null));
+
+    // Enough shape to exercise campaigns locally, including one template that is not approved.
+    public Task<IReadOnlyCollection<WhatsAppTemplate>> ListTemplatesAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyCollection<WhatsAppTemplate>>(
+        [
+            new("order_update", "en", "UTILITY", "APPROVED", "Hello {{1}}, your order {{2}} has shipped.", 2),
+            new("seasonal_offer", "en", "MARKETING", "APPROVED", "Hi {{1}}, enjoy 20% off this week.", 1),
+            new("pending_review", "en", "MARKETING", "PENDING", "Draft awaiting approval.", 0),
+        ]);
+
+    public Task<WhatsAppSendResult> SendTemplateAsync(string phoneNumberId, string recipient, string templateName, string language, IReadOnlyList<string> variables, CancellationToken ct)
         => Task.FromResult(new WhatsAppSendResult(true, $"dev-{Guid.NewGuid():N}", null));
 }

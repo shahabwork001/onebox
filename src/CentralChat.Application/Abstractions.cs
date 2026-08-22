@@ -39,6 +39,9 @@ public interface IDirectoryService
 {
     Task<PagedResult<ContactDto>> ContactsAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
     Task<ContactDto> ContactAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Consent is set by a person as often as by a keyword, so it needs a manual path too.</summary>
+    Task<ContactDto> SetMarketingOptOutAsync(Guid contactId, bool optedOut, Guid actingUserId, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<AgentDto>> UsersAsync(bool includeInactive, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<TeamDto>> TeamsAsync(CancellationToken cancellationToken);
 }
@@ -97,3 +100,17 @@ public interface IUserAdminService
     Task ChangeOwnPasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Marketing broadcasts. Kept apart from conversation sending because the rules differ entirely: only
+/// approved templates may be used, consent has to be honoured, and a send must be pausable partway.
+/// </summary>
+public interface ICampaignService
+{
+    Task<IReadOnlyCollection<TemplateDto>> TemplatesAsync(CancellationToken cancellationToken);
+    Task<CampaignAudienceDto> AudienceAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<CampaignDto>> ListAsync(CancellationToken cancellationToken);
+    Task<CampaignDto> GetAsync(Guid campaignId, CancellationToken cancellationToken);
+    Task<CampaignDto> CreateAsync(CreateCampaignRequest request, Guid createdBy, CancellationToken cancellationToken);
+    Task<CampaignDto> StartAsync(Guid campaignId, IReadOnlyList<string> variables, Guid startedBy, CancellationToken cancellationToken);
+    Task<CampaignDto> SetPausedAsync(Guid campaignId, bool paused, Guid actingUserId, CancellationToken cancellationToken);
+}

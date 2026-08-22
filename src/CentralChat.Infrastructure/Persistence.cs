@@ -36,6 +36,8 @@ public sealed class RolePermission
 public sealed class CentralChatDbContext(DbContextOptions<CentralChatDbContext> options) : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
 {
     public DbSet<WhatsAppChannel> WhatsAppChannels => Set<WhatsAppChannel>();
+    public DbSet<Campaign> Campaigns => Set<Campaign>();
+    public DbSet<CampaignRecipient> CampaignRecipients => Set<CampaignRecipient>();
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
@@ -56,6 +58,11 @@ public sealed class CentralChatDbContext(DbContextOptions<CentralChatDbContext> 
         base.OnModelCreating(b);
         b.HasDefaultSchema("centralchat");
         b.Entity<WhatsAppChannel>().HasIndex(x => x.PhoneNumberId).IsUnique();
+        b.Entity<Campaign>().HasIndex(x => x.CreatedAt);
+        // A campaign reaches a contact once; the unique index is what makes a redelivered send a no-op.
+        b.Entity<CampaignRecipient>().HasIndex(x => new { x.CampaignId, x.ContactId }).IsUnique();
+        b.Entity<CampaignRecipient>().HasIndex(x => x.ExternalMessageId);
+        b.Entity<Contact>().HasIndex(x => x.MarketingOptOut);
         b.Entity<Contact>().HasIndex(x => new { x.ChannelId, x.WhatsAppUserId }).IsUnique();
         b.Entity<Contact>().HasIndex(x => x.PhoneNumber);
         b.Entity<Contact>().HasIndex(x => x.CurrentAssignedAgentId);
