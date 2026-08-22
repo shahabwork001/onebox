@@ -232,11 +232,23 @@ npm run lint
 npm run build
 ```
 
-`CentralChat.UnitTests` currently covers domain rules only: ticket assignment and lifecycle
-transitions, contact ownership, and outbound message state. The reliability controls listed above —
-webhook replay deduplication, outbox/inbox idempotency, concurrent claiming, and ownership denial on
-send — are implemented but **not yet covered by automated tests**; verifying them requires an
-integration suite against real PostgreSQL and RabbitMQ instances.
+`CentralChat.UnitTests` covers domain rules: ticket assignment and lifecycle transitions, contact
+ownership, and outbound message state.
+
+`CentralChat.IntegrationTests` runs against a real PostgreSQL, because the behaviour it protects is
+enforced by unique indexes and an in-memory provider would pass while the bug was present. It covers
+webhook ingestion: several messages from one new contact in a single payload, several contacts, replay
+deduplication, and media extraction. Point `TEST_POSTGRES` at a server to run them:
+
+```powershell
+$env:TEST_POSTGRES = "Host=localhost;Port=55432;Database=postgres;Username=postgres;Password=postgres"
+dotnet test CentralChat.sln
+```
+
+Without that variable they are skipped rather than failed, so a checkout with no database still tests
+cleanly. CI supplies one as a service container. Each test creates and drops its own database.
+
+Still uncovered: outbox and inbox idempotency, concurrent claiming, and ownership denial on send.
 
 ## Realtime event names
 
