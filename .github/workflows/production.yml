@@ -73,10 +73,10 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/shahabwork001/unidesk-api:${{ github.sha }}
-            ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ghcr.io/shahabwork001/unidesk-api:production' || '' }}
-          cache-from: type=gha,scope=unidesk-api
-          cache-to: type=gha,mode=max,scope=unidesk-api
+            ghcr.io/shahabwork001/onebox-api:${{ github.sha }}
+            ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ghcr.io/shahabwork001/onebox-api:production' || '' }}
+          cache-from: type=gha,scope=onebox-api
+          cache-to: type=gha,mode=max,scope=onebox-api
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v7
@@ -88,7 +88,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=
           tags: |
-            ghcr.io/shahabwork001/unidesk-web:${{ github.sha }}
-            ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ghcr.io/shahabwork001/unidesk-web:production' || '' }}
-          cache-from: type=gha,scope=unidesk-web
-          cache-to: type=gha,mode=max,scope=unidesk-web
+            ghcr.io/shahabwork001/onebox-web:${{ github.sha }}
+            ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ghcr.io/shahabwork001/onebox-web:production' || '' }}
+          cache-from: type=gha,scope=onebox-web
+          cache-to: type=gha,mode=max,scope=onebox-web

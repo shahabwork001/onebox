@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CentralChat",
-  description: "Centralized WhatsApp communication workspace",
+  title: "Onebox",
+  description: "One inbox for your whole team",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

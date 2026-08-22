@@ -28,11 +28,11 @@ export function LoginView({ onSignedIn }: { onSignedIn: (auth: Auth) => void }) 
       <section className="login-form">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            C
+            O
           </span>
           <div className="brand-copy">
-            <b>CentralChat</b>
-            <small>One inbox. Every customer.</small>
+            <b>Onebox</b>
+            <small>One inbox for your whole team</small>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export function LoginView({ onSignedIn }: { onSignedIn: (auth: Auth) => void }) 
         <div className="login-art-mark" aria-hidden="true">
           ✦
         </div>
-        <blockquote>Bring every customer conversation into one calm, focused workspace.</blockquote>
+        <blockquote>Every customer conversation, in one inbox your whole team can work.</blockquote>
         <p>Secure assignment · Real-time delivery · Complete history</p>
       </aside>
     </main>

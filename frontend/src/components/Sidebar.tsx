@@ -81,10 +81,10 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">
-          C
+          O
         </span>
         <div className="brand-copy">
-          <b>CentralChat</b>
+          <b>Onebox</b>
           <small>WhatsApp workspace</small>
         </div>
       </div>

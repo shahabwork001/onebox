@@ -1,6 +1,6 @@
-# CentralChat
+# Onebox
 
-CentralChat is a production-oriented modular monolith for centralized WhatsApp customer communication. The first usable milestone is implemented end to end: Meta webhook ingestion → durable RabbitMQ processing → PostgreSQL contact/conversation/ticket/message persistence → targeted SignalR events → agent inbox → concurrency-safe claim → queued outbound Meta send.
+Onebox is a production-oriented modular monolith for centralized WhatsApp customer communication. The first usable milestone is implemented end to end: Meta webhook ingestion → durable RabbitMQ processing → PostgreSQL contact/conversation/ticket/message persistence → targeted SignalR events → agent inbox → concurrency-safe claim → queued outbound Meta send.
 
 ## Architecture
 

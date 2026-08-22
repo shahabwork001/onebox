@@ -1,6 +1,6 @@
 import type { Auth } from "./types";
 
-const STORAGE_KEY = "centralchat.auth";
+const STORAGE_KEY = "onebox.auth";
 
 export function readSession(): Auth | null {
   if (typeof window === "undefined") return null;
