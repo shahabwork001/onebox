@@ -760,6 +760,18 @@ button:disabled {
   color: var(--ink-subtle);
 }
 
+/* The box grows with the draft and stops at its maximum, so the bar only ever appears on a very long
+   message and reads as clutter in a control this small. Content still scrolls; the track is hidden. */
+.composer textarea {
+  scrollbar-width: none;
+}
+
+.composer textarea::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .composer textarea:focus {
   border-color: var(--brand);
 }
