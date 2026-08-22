@@ -344,6 +344,47 @@ export function Workspace() {
    * and the stored message replaces it on confirmation. A rejected send leaves the message visible
    * and marked failed rather than silently dropping what the agent wrote.
    */
+  /**
+   * Uploads take long enough to notice, so the attachment is shown as pending from the moment it is
+   * chosen and settled when the server returns the stored message, exactly as a text reply behaves.
+   */
+  const sendAttachment = useCallback(
+    async (file: File, caption: string) => {
+      if (!auth || !selected) return;
+      const conversationId = selected.conversationId;
+      const draft: Message = {
+        ...draftMessage(conversationId, caption),
+        type: file.type.startsWith("image/")
+          ? "Image"
+          : file.type.startsWith("video/")
+            ? "Video"
+            : file.type.startsWith("audio/")
+              ? "Audio"
+              : "Document",
+        mimeType: file.type,
+        mediaSizeBytes: file.size,
+      };
+
+      setComposer("");
+      setMessages(current => [...current, draft]);
+
+      try {
+        const sent = await api.sendAttachment(auth.accessToken, conversationId, file, caption);
+        setMessages(current => {
+          const settled = current.filter(message => message.id !== draft.id);
+          return settled.some(message => message.id === sent.id) ? settled : [...settled, sent];
+        });
+        loadTickets();
+      } catch (cause) {
+        setMessages(current =>
+          current.map(message => (message.id === draft.id ? { ...message, status: "Failed" } : message)),
+        );
+        report(cause);
+      }
+    },
+    [auth, selected, loadTickets, report],
+  );
+
   const sendMessage = useCallback(
     async (text: string) => {
       if (!auth || !selected) return;
@@ -536,6 +577,7 @@ export function Workspace() {
               onAssign: agentId => selected && run(() => api.assign(auth.accessToken, selected.id, agentId)),
               onChangeStatus: action => selected && run(() => api.changeStatus(auth.accessToken, selected.id, action)),
               onSend: sendMessage,
+              onAttach: sendAttachment,
             }}
           />
         </>

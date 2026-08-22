@@ -23,6 +23,9 @@ public interface IConversationService
     Task<ConversationDto> GetAsync(Guid id, Guid userId, bool privileged, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<MessageDto>> MessagesAsync(Guid id, Guid? beforeId, int limit, Guid userId, bool privileged, CancellationToken cancellationToken);
     Task<MessageDto> SendAsync(Guid id, string text, Guid userId, bool privileged, CancellationToken cancellationToken);
+
+    /// <summary>Stores the file, then queues it through the same outbound path a text reply uses.</summary>
+    Task<MessageDto> SendAttachmentAsync(Guid id, Stream content, string fileName, string mimeType, string? caption, Guid userId, bool privileged, CancellationToken cancellationToken);
 }
 
 public interface IWebhookIngestionService

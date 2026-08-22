@@ -120,7 +120,22 @@ public sealed class RabbitConsumer(IServiceScopeFactory scopes, RabbitConnection
         var db = services.GetRequiredService<CentralChatDbContext>(); var message = await db.ChatMessages.SingleAsync(x => x.Id == id, ct);
         if (message.Status != MessageStatus.Queued) return;
         var contact = await db.Contacts.SingleAsync(x => x.Id == message.ContactId, ct); var channel = await db.WhatsAppChannels.SingleAsync(x => x.Id == message.ChannelId, ct);
-        var client = services.GetRequiredService<IWhatsAppClient>(); var result = await client.SendTextAsync(channel.PhoneNumberId, contact.PhoneNumber, message.TextBody!, ct);
+        var client = services.GetRequiredService<IWhatsAppClient>();
+
+        // An attachment travels the same durable path as a reply; only the provider call differs.
+        WhatsAppSendResult result;
+        if (message.HasStoredMedia)
+        {
+            var store = services.GetRequiredService<CentralChat.Application.IMediaStore>();
+            await using var content = await store.OpenAsync(message.MediaUrl!, ct)
+                ?? throw new InvalidOperationException($"Stored media for message {message.Id} is missing.");
+            result = await client.SendMediaAsync(channel.PhoneNumberId, contact.PhoneNumber, content,
+                message.MimeType ?? "application/octet-stream", $"{message.Id}", message.Type, message.TextBody, ct);
+        }
+        else
+        {
+            result = await client.SendTextAsync(channel.PhoneNumberId, contact.PhoneNumber, message.TextBody!, ct);
+        }
         if (result.Success && result.ExternalMessageId is not null) message.MarkSent(result.ExternalMessageId); else message.MarkFailed(result.Error ?? "Unknown provider failure");
         await db.SaveChangesAsync(ct);
         var notifier = services.GetRequiredService<IRealtimeNotifier>(); await notifier.ConversationAsync(message.ConversationId, result.Success ? "message.sent" : "message.failed", new { message.Id, message.Status, message.ExternalMessageId, message.FailureReason }, ct);

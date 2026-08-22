@@ -2,10 +2,11 @@ using System.Text.Json;
 using CentralChat.Application;
 using CentralChat.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CentralChat.Infrastructure;
 
-public sealed class ConversationService(CentralChatDbContext db, ITicketBroadcaster broadcast) : IConversationService
+public sealed class ConversationService(CentralChatDbContext db, ITicketBroadcaster broadcast, IMediaStore media, IOptions<MediaOptions> mediaOptions) : IConversationService
 {
     public async Task<ConversationDto> GetAsync(Guid id, Guid userId, bool privileged, CancellationToken ct)
     {
@@ -44,6 +45,55 @@ public sealed class ConversationService(CentralChatDbContext db, ITicketBroadcas
         if (ticket is not null) await broadcast.UpsertedAsync(ticket.Id, ct);
 
         return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes);
+    }
+
+    public async Task<MessageDto> SendAttachmentAsync(Guid id, Stream content, string fileName, string mimeType, string? caption, Guid userId, bool privileged, CancellationToken ct)
+    {
+        var conversation = await GetAsync(id, userId, privileged, ct);
+        await EnsureWithinSessionWindowAsync(id, ct);
+
+        // WhatsApp caps well below this; the limit here is to stop a bad upload filling the disk.
+        var maxBytes = mediaOptions.Value.MaxBytes;
+        if (content.CanSeek && content.Length > maxBytes)
+            throw new ValidationException($"Attachments must be {maxBytes / (1024 * 1024)} MB or smaller.");
+        if (string.IsNullOrWhiteSpace(mimeType)) throw new ValidationException("The file type could not be determined.");
+
+        var kind = KindOf(mimeType);
+        // Stored before anything is queued, so the outbound worker always has a file to read.
+        var key = await media.SaveAsync(content, ExtensionOf(fileName), ct);
+
+        var channelId = await db.Conversations.Where(x => x.Id == id).Select(x => x.ChannelId).SingleAsync(ct);
+        var message = new ChatMessage(id, conversation.ContactId, channelId, MessageDirection.Outbound, kind, string.IsNullOrWhiteSpace(caption) ? null : caption.Trim(), null, DateTimeOffset.UtcNow);
+        message.SetSender(userId);
+        message.SetStoredMedia(key, mimeType, content.CanSeek ? content.Length : 0);
+        db.ChatMessages.Add(message);
+        db.OutboxMessages.Add(new OutboxMessage { Type = "OutboundWhatsAppMessageRequested", Payload = JsonSerializer.Serialize(new { MessageId = message.Id }) });
+
+        var conversationRow = await db.Conversations.SingleAsync(x => x.Id == id, ct);
+        conversationRow.Touch(message.ProviderTimestamp);
+        var ticket = await db.Tickets.SingleOrDefaultAsync(
+            x => x.ContactId == conversation.ContactId && x.Status != TicketStatus.Closed && x.Status != TicketStatus.Resolved, ct);
+        ticket?.Touch(message.ProviderTimestamp);
+
+        await db.SaveChangesAsync(ct);
+        if (ticket is not null) await broadcast.UpsertedAsync(ticket.Id, ct);
+
+        return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes);
+    }
+
+    /// <summary>WhatsApp routes by media kind, and anything it does not recognise travels as a document.</summary>
+    private static MessageType KindOf(string mimeType) => mimeType.Split('/')[0].ToLowerInvariant() switch
+    {
+        "image" => MessageType.Image,
+        "video" => MessageType.Video,
+        "audio" => MessageType.Audio,
+        _ => MessageType.Document,
+    };
+
+    private static string ExtensionOf(string fileName)
+    {
+        var dot = fileName.LastIndexOf('.');
+        return dot >= 0 ? fileName[(dot + 1)..] : string.Empty;
     }
 
     /// <summary>

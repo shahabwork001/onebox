@@ -237,6 +237,9 @@ public interface IWhatsAppClient
 
     /// <summary>Meta hands out a short-lived URL for a media id; the binary needs the access token too.</summary>
     Task<WhatsAppMedia?> DownloadMediaAsync(string mediaId, CancellationToken cancellationToken);
+
+    /// <summary>Uploads the binary, then sends a message referring to it by the id Meta returns.</summary>
+    Task<WhatsAppSendResult> SendMediaAsync(string phoneNumberId, string recipient, Stream content, string mimeType, string fileName, MessageType kind, string? caption, CancellationToken cancellationToken);
 }
 
 public sealed class MetaWhatsAppClient(HttpClient http, IOptions<MetaWhatsAppOptions> options) : IWhatsAppClient
@@ -252,6 +255,62 @@ public sealed class MetaWhatsAppClient(HttpClient http, IOptions<MetaWhatsAppOpt
         using var doc = JsonDocument.Parse(body); var id = doc.RootElement.TryGetProperty("messages", out var messages) && messages.GetArrayLength() > 0 ? messages[0].GetProperty("id").GetString() : null;
         return new(id is not null, id, id is null ? "Meta response did not contain a message id." : null);
     }
+
+    public async Task<WhatsAppSendResult> SendMediaAsync(string phoneNumberId, string recipient, Stream content, string mimeType, string fileName, MessageType kind, string? caption, CancellationToken ct)
+    {
+        // Meta will not accept a binary inline: it must be uploaded first and referenced by id.
+        using var upload = new HttpRequestMessage(HttpMethod.Post, $"{_options.ApiVersion}/{phoneNumberId}/media");
+        upload.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
+        using var form = new MultipartFormDataContent();
+        var file = new StreamContent(content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(mimeType);
+        form.Add(new StringContent("whatsapp"), "messaging_product");
+        form.Add(new StringContent(mimeType), "type");
+        form.Add(file, "file", fileName);
+        upload.Content = form;
+
+        using var uploadResponse = await http.SendAsync(upload, ct);
+        var uploadBody = await uploadResponse.Content.ReadAsStringAsync(ct);
+        if (!uploadResponse.IsSuccessStatusCode) return new(false, null, $"Meta rejected the upload ({(int)uploadResponse.StatusCode}): {uploadBody[..Math.Min(uploadBody.Length, 400)]}");
+
+        using var uploaded = JsonDocument.Parse(uploadBody);
+        var mediaId = uploaded.RootElement.TryGetProperty("id", out var id) ? id.GetString() : null;
+        if (string.IsNullOrWhiteSpace(mediaId)) return new(false, null, "Meta upload response did not contain a media id.");
+
+        var typeName = MediaTypeName(kind);
+        object descriptor = kind == MessageType.Document
+            ? new { id = mediaId, caption, filename = fileName }
+            : kind == MessageType.Audio
+                ? new { id = mediaId }                       // Meta rejects a caption on audio
+                : new { id = mediaId, caption };
+
+        using var send = new HttpRequestMessage(HttpMethod.Post, $"{_options.ApiVersion}/{phoneNumberId}/messages");
+        send.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
+        send.Content = JsonContent.Create(new Dictionary<string, object?>
+        {
+            ["messaging_product"] = "whatsapp",
+            ["to"] = recipient.TrimStart('+'),
+            ["type"] = typeName,
+            [typeName] = descriptor,
+        });
+
+        using var sendResponse = await http.SendAsync(send, ct);
+        var sendBody = await sendResponse.Content.ReadAsStringAsync(ct);
+        if (!sendResponse.IsSuccessStatusCode) return new(false, null, $"Meta returned {(int)sendResponse.StatusCode}: {sendBody[..Math.Min(sendBody.Length, 400)]}");
+
+        using var sent = JsonDocument.Parse(sendBody);
+        var messageId = sent.RootElement.TryGetProperty("messages", out var messages) && messages.GetArrayLength() > 0 ? messages[0].GetProperty("id").GetString() : null;
+        return new(messageId is not null, messageId, messageId is null ? "Meta response did not contain a message id." : null);
+    }
+
+    private static string MediaTypeName(MessageType kind) => kind switch
+    {
+        MessageType.Image => "image",
+        MessageType.Video => "video",
+        MessageType.Audio => "audio",
+        MessageType.Sticker => "sticker",
+        _ => "document",
+    };
 
     public async Task<WhatsAppMedia?> DownloadMediaAsync(string mediaId, CancellationToken ct)
     {
@@ -284,4 +343,7 @@ public sealed class DevelopmentWhatsAppClient : IWhatsAppClient
     public Task<WhatsAppSendResult> SendTextAsync(string phoneNumberId, string recipient, string text, CancellationToken ct) => Task.FromResult(new WhatsAppSendResult(true, $"dev-{Guid.NewGuid():N}", null));
 
     public Task<WhatsAppMedia?> DownloadMediaAsync(string mediaId, CancellationToken ct) => Task.FromResult<WhatsAppMedia?>(new(Placeholder, "image/png"));
+
+    public Task<WhatsAppSendResult> SendMediaAsync(string phoneNumberId, string recipient, Stream content, string mimeType, string fileName, MessageType kind, string? caption, CancellationToken ct)
+        => Task.FromResult(new WhatsAppSendResult(true, $"dev-{Guid.NewGuid():N}", null));
 }

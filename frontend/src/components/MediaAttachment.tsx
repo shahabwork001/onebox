@@ -52,8 +52,14 @@ export function MediaAttachment({ message, token }: { message: Message; token: s
   const kind = kindOf(message.mimeType);
   const label = `${message.type}${message.mediaSizeBytes ? ` · ${formatBytes(message.mediaSizeBytes)}` : ""}`;
 
-  // Ingestion records the message before the binary is fetched, so this is a normal transient state.
-  if (!message.mediaReady) return <span className="media-pending">Downloading {message.type.toLowerCase()}…</span>;
+  // Both directions store the binary after recording the message, so this is a normal transient state:
+  // inbound is still being fetched from the provider, outbound is still on its way up.
+  if (!message.mediaReady)
+    return (
+      <span className="media-pending">
+        {message.direction === "Outbound" ? "Uploading" : "Downloading"} {message.type.toLowerCase()}…
+      </span>
+    );
   if (failed) return <span className="media-failed">{message.type} unavailable</span>;
   if (!url) return <span className="media-pending">Loading…</span>;
 

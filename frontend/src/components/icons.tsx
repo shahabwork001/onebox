@@ -146,3 +146,9 @@ export const IconTeam = (p: IconProps) => (
   </Glyph>
 );
 
+export const IconAttach = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M21 12.5L12.5 21a5 5 0 0 1-7-7l8.5-8.5a3.4 3.4 0 0 1 4.8 4.8l-8.5 8.5a1.8 1.8 0 0 1-2.5-2.5l7.8-7.8" />
+  </Glyph>
+);
+

@@ -76,6 +76,25 @@ export const api = {
   messages: (token: string, conversationId: string) =>
     send<Message[]>(`/api/conversations/${conversationId}/messages?limit=100`, token),
 
+  /** Multipart, so the browser sets its own boundary: never set Content-Type by hand here. */
+  sendAttachment: async (token: string, conversationId: string, file: File, caption: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (caption.trim()) form.append("caption", caption.trim());
+
+    const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/attachments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      throw new ApiError(response.status, problem?.detail ?? `Upload failed (${response.status})`);
+    }
+    return (await response.json()) as Message;
+  },
+
   sendMessage: (token: string, conversationId: string, text: string) =>
     send<Message>(`/api/conversations/${conversationId}/messages`, token, {
       method: "POST",

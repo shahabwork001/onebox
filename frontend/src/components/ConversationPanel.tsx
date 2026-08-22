@@ -8,9 +8,10 @@ import { ActionMenu, type MenuAction } from "./ActionMenu";
 import { AssignMenu } from "./AssignMenu";
 import { MediaAttachment } from "./MediaAttachment";
 import { Avatar, DeliveryTick, EmptyState, Spinner, StatusBadge } from "./Primitives";
-import { IconBack, IconClock, IconLock, IconMessage, IconSelect, IconSend } from "./icons";
+import { IconAttach, IconBack, IconClock, IconLock, IconMessage, IconSelect, IconSend } from "./icons";
 
 export type ConversationActions = {
+  onAttach: (file: File, caption: string) => void;
   onClaim: () => void;
   onRelease: () => void;
   onAssign: (agentId: string) => void;
@@ -52,6 +53,7 @@ export function ConversationPanel({
   const bottom = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const composerBox = useRef<HTMLTextAreaElement>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
   const lastConversation = useRef<string | null>(null);
 
   useEffect(() => {
@@ -204,6 +206,27 @@ export function ConversationPanel({
       )}
 
       <form className="composer" onSubmit={submit}>
+        <input
+          ref={filePicker}
+          type="file"
+          className="visually-hidden"
+          onChange={event => {
+            const file = event.target.files?.[0];
+            if (file) actions.onAttach(file, composer);
+            // Reset so choosing the same file twice still fires a change.
+            event.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          className="icon-button composer-attach"
+          disabled={!canReply || busy}
+          title="Attach a file"
+          aria-label="Attach a file"
+          onClick={() => filePicker.current?.click()}
+        >
+          <IconAttach size={18} />
+        </button>
         <textarea
           ref={composerBox}
           value={composer}
