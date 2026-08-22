@@ -76,6 +76,16 @@ public interface IMediaService
 /// Writes to the user directory. Kept apart from <see cref="IDirectoryService"/> because reading the
 /// roster is something any assigner does, while changing it is an administrative act.
 /// </summary>
+/// <summary>
+/// Publishes ticket changes as the projected list row rather than a bare identifier, so a client can
+/// update the conversation it already holds instead of reloading every list on every event.
+/// </summary>
+public interface ITicketBroadcaster
+{
+    Task UpsertedAsync(Guid ticketId, CancellationToken cancellationToken);
+    Task RemovedAsync(Guid ticketId, CancellationToken cancellationToken);
+}
+
 public interface IUserAdminService
 {
     Task<AgentDto> CreateAsync(CreateUserRequest request, Guid actingUserId, CancellationToken cancellationToken);

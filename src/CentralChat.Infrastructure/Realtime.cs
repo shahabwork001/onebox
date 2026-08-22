@@ -11,6 +11,7 @@ public sealed class CommunicationHub : Hub
         var userId = Context.UserIdentifier;
         if (userId is not null) await Groups.AddToGroupAsync(Context.ConnectionId, $"user:{userId}");
         await Groups.AddToGroupAsync(Context.ConnectionId, "unassigned");
+        await Groups.AddToGroupAsync(Context.ConnectionId, "workspace");
         await base.OnConnectedAsync();
     }
 
@@ -21,6 +22,9 @@ public interface IRealtimeNotifier
 {
     Task UserAsync(Guid userId, string name, object payload, CancellationToken cancellationToken);
     Task UnassignedAsync(string name, object payload, CancellationToken cancellationToken);
+
+    /// <summary>Every signed-in client, for changes that any queue view might need to reflect.</summary>
+    Task WorkspaceAsync(string name, object payload, CancellationToken cancellationToken);
     Task ConversationAsync(Guid conversationId, string name, object payload, CancellationToken cancellationToken);
 }
 
@@ -28,5 +32,6 @@ public sealed class RealtimeNotifier(IHubContext<CommunicationHub> hub) : IRealt
 {
     public Task UserAsync(Guid userId, string name, object payload, CancellationToken ct) => hub.Clients.Group($"user:{userId}").SendAsync(name, payload, ct);
     public Task UnassignedAsync(string name, object payload, CancellationToken ct) => hub.Clients.Group("unassigned").SendAsync(name, payload, ct);
+    public Task WorkspaceAsync(string name, object payload, CancellationToken ct) => hub.Clients.Group("workspace").SendAsync(name, payload, ct);
     public Task ConversationAsync(Guid id, string name, object payload, CancellationToken ct) => hub.Clients.Group($"conversation:{id}").SendAsync(name, payload, ct);
 }

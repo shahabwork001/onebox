@@ -5,26 +5,30 @@ import * as signalR from "@microsoft/signalr";
 import { API_BASE } from "@/lib/api";
 
 /**
- * Hub events are hints, not data. Every one of them triggers a REST reload, so the UI is always
- * showing authoritative server state and a dropped connection degrades to "slightly stale" rather
- * than "wrong".
+ * Hub events carry the changed entity, so a client updates what it already holds instead of reloading
+ * every list on every event. That distinction is what makes a hundred connected agents affordable:
+ * one arriving message used to cost one reload per agent.
+ *
+ * A periodic reconciliation still runs, because the client decides locally whether a changed ticket
+ * belongs in the current view and that judgement can drift from the server's.
  */
 const EVENTS = [
+  "ticket.upserted",
+  "ticket.removed",
+  "ticket.status.changed",
   "message.received",
-  "message.updated",
   "message.sent",
   "message.failed",
-  "ticket.created",
-  "ticket.claimed",
-  "ticket.removed",
-  "ticket.assignment.added",
-  "ticket.assignment.removed",
-  "ticket.status.changed",
+  "message.updated",
 ] as const;
 
+export type RealtimeEvent = (typeof EVENTS)[number];
+
+/** Emitted after a reconnect: everything that happened while disconnected was missed entirely. */
+export type RealtimeSignal = RealtimeEvent | "resync";
 export type RealtimeState = "connecting" | "live" | "offline";
 
-export function useRealtime(token: string | undefined, onEvent: () => void) {
+export function useRealtime(token: string | undefined, onEvent: (event: RealtimeSignal, payload: unknown) => void) {
   const [state, setState] = useState<RealtimeState>("connecting");
   const handler = useRef(onEvent);
   handler.current = onEvent;
@@ -37,11 +41,12 @@ export function useRealtime(token: string | undefined, onEvent: () => void) {
       .withAutomaticReconnect()
       .build();
 
-    for (const event of EVENTS) connection.on(event, () => handler.current());
+    for (const event of EVENTS) connection.on(event, (payload: unknown) => handler.current(event, payload));
+
     connection.onreconnecting(() => setState("connecting"));
     connection.onreconnected(() => {
       setState("live");
-      handler.current();
+      handler.current("resync", null);
     });
     connection.onclose(() => setState("offline"));
 

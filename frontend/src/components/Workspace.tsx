@@ -9,6 +9,7 @@ import {
   draftMessage,
   isFullWidthView,
   isPending,
+  matchesView,
   type Agent,
   type Auth,
   type Dashboard,
@@ -18,7 +19,7 @@ import {
   type Ticket,
   type View,
 } from "@/lib/types";
-import { useRealtime } from "@/hooks/useRealtime";
+import { useRealtime, type RealtimeSignal } from "@/hooks/useRealtime";
 import { LoginView } from "./LoginView";
 import { Sidebar } from "./Sidebar";
 import { InboxPanel } from "./InboxPanel";
@@ -26,6 +27,10 @@ import { ConversationPanel } from "./ConversationPanel";
 import { DashboardView } from "./DashboardView";
 import { QueueTable } from "./QueueTable";
 import { TeamView } from "./TeamView";
+
+/** Ceiling on reconciliation: at a hundred agents this is the difference between 5 and 1500 queries a second. */
+const RECONCILE_INTERVAL_MS = 15_000;
+const DASHBOARD_REFRESH_MS = 30_000;
 
 export function Workspace() {
   const [auth, setAuth] = useState<Auth | null>(null);
@@ -234,11 +239,105 @@ export function Workspace() {
     loadMessages();
   }, [loadMessages]);
 
-  const realtime = useRealtime(token, () => {
-    loadTickets();
-    loadMessages();
-    if (view === "dashboard") loadDashboard();
-  });
+  /**
+   * Events carry the changed entity, so the common path costs no requests at all: an arriving message
+   * updates the open transcript and the list row it belongs to. Reloading is kept for reconciliation,
+   * throttled hard, because the client decides locally whether a ticket belongs in the current view
+   * and that judgement can drift from the server's.
+   */
+  const lastReconcile = useRef(0);
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const reconcile = useCallback(
+    (immediate = false) => {
+      const since = Date.now() - lastReconcile.current;
+      const run = () => {
+        lastReconcile.current = Date.now();
+        loadTickets();
+        loadMessages();
+      };
+
+      if (immediate || since > RECONCILE_INTERVAL_MS) {
+        if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+        reconcileTimer.current = null;
+        run();
+        return;
+      }
+      if (reconcileTimer.current) return;
+      reconcileTimer.current = setTimeout(() => {
+        reconcileTimer.current = null;
+        run();
+      }, RECONCILE_INTERVAL_MS - since);
+    },
+    [loadTickets, loadMessages],
+  );
+
+  const applyTicket = useCallback(
+    (incoming: Ticket) => {
+      setTickets(current => {
+        const without = current.filter(ticket => ticket.id !== incoming.id);
+        if (!auth || !matchesView(incoming, scope, status, auth.user.id)) return without;
+        return [incoming, ...without].sort(
+          (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime(),
+        );
+      });
+    },
+    [auth, scope, status],
+  );
+
+  const onRealtime = useCallback(
+    (event: RealtimeSignal, payload: unknown) => {
+      if (event === "resync") {
+        reconcile(true);
+        return;
+      }
+
+      if (event === "ticket.upserted") {
+        const ticket = payload as Ticket;
+        applyTicket(ticket);
+        // The queue badge is a count the payload cannot supply, so let it settle on the next pass.
+        reconcile();
+        return;
+      }
+
+      if (event === "ticket.removed") {
+        const { ticketId } = (payload ?? {}) as { ticketId?: string };
+        if (ticketId) setTickets(current => current.filter(ticket => ticket.id !== ticketId));
+        return;
+      }
+
+      // Message events are scoped to a conversation group, so they only arrive for threads worth
+      // updating; anything for a thread that is not open needs nothing.
+      const message = payload as Message | null;
+      if (!message?.conversationId || message.conversationId !== conversationId) return;
+
+      setMessages(current => {
+        const existing = current.findIndex(item => item.id === message.id);
+        if (existing >= 0) {
+          const next = [...current];
+          next[existing] = message;
+          return next;
+        }
+        return [...current, message];
+      });
+    },
+    [applyTicket, conversationId, reconcile],
+  );
+
+  const realtime = useRealtime(token, onRealtime);
+
+  // A tab left open in the background can miss events; catch up when it comes back into use.
+  useEffect(() => {
+    const onFocus = () => reconcile(true);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [reconcile]);
+
+  useEffect(() => {
+    if (view !== "dashboard") return;
+    const timer = setInterval(loadDashboard, DASHBOARD_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [view, loadDashboard]);
 
   /**
    * The draft is shown before the request leaves, which is what makes the composer feel immediate,

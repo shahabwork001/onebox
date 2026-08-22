@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace CentralChat.Infrastructure;
 
-public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<MetaWhatsAppOptions> options, IRealtimeNotifier realtime, ILogger<WebhookIngestionService> logger) : IWebhookIngestionService
+public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<MetaWhatsAppOptions> options, IRealtimeNotifier realtime, ITicketBroadcaster broadcast, ILogger<WebhookIngestionService> logger) : IWebhookIngestionService
 {
     private readonly MetaWhatsAppOptions _options = options.Value;
 
@@ -52,9 +52,9 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
                 var notifications = await ProcessOnceAsync(eventId, ct);
                 foreach (var n in notifications)
                 {
+                    // The open transcript needs the message; every queue view needs the updated row.
                     await realtime.ConversationAsync(n.ConversationId, "message.received", n.Message, ct);
-                    if (n.AgentId.HasValue) await realtime.UserAsync(n.AgentId.Value, "message.received", new { n.TicketId, Message = n.Message }, ct);
-                    else await realtime.UnassignedAsync("ticket.created", new { n.TicketId, Message = n.Message }, ct);
+                    await broadcast.UpsertedAsync(n.TicketId, ct);
                 }
                 logger.LogInformation("Processed webhook {WebhookEventId} with {MessageCount} new messages", eventId, notifications.Count);
                 return;

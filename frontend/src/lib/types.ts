@@ -154,6 +154,24 @@ export const TERMINAL_STATUSES: TicketStatus[] = ["Resolved", "Closed"];
 
 export const isTerminal = (ticket: Pick<Ticket, "status">) => TERMINAL_STATUSES.includes(ticket.status);
 
+/**
+ * Mirrors the server's scope and status filters so a ticket arriving over the hub can be placed
+ * without asking for the list again. Reconciliation exists because this judgement can drift.
+ */
+export function matchesView(ticket: Ticket, scope: Scope, status: StatusFilter, userId: string) {
+  const inScope =
+    scope === "all" ? true : scope === "mine" ? ticket.assignedAgentId === userId : ticket.assignedAgentId === null;
+
+  const inStatus =
+    status === "all"
+      ? true
+      : status === "active"
+        ? !isTerminal(ticket)
+        : ticket.status.toLowerCase() === status;
+
+  return inScope && inStatus;
+}
+
 export const isUnclaimed = (ticket: Pick<Ticket, "status" | "assignedAgentId">) =>
   !ticket.assignedAgentId && !isTerminal(ticket);
 

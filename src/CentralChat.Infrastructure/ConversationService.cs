@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CentralChat.Infrastructure;
 
-public sealed class ConversationService(CentralChatDbContext db) : IConversationService
+public sealed class ConversationService(CentralChatDbContext db, ITicketBroadcaster broadcast) : IConversationService
 {
     public async Task<ConversationDto> GetAsync(Guid id, Guid userId, bool privileged, CancellationToken ct)
     {
@@ -31,7 +31,18 @@ public sealed class ConversationService(CentralChatDbContext db) : IConversation
         var message = new ChatMessage(id, conversation.ContactId, channelId, MessageDirection.Outbound, MessageType.Text, text.Trim(), null, DateTimeOffset.UtcNow); message.SetSender(userId);
         db.ChatMessages.Add(message);
         db.OutboxMessages.Add(new OutboxMessage { Type = "OutboundWhatsAppMessageRequested", Payload = JsonSerializer.Serialize(new { MessageId = message.Id }) });
+
+        // Replying is activity too. Without this the conversation keeps sorting by the customer's last
+        // message and drifts down the list the moment an agent answers it.
+        var conversationRow = await db.Conversations.SingleAsync(x => x.Id == id, ct);
+        conversationRow.Touch(message.ProviderTimestamp);
+        var ticket = await db.Tickets.SingleOrDefaultAsync(
+            x => x.ContactId == conversation.ContactId && x.Status != TicketStatus.Closed && x.Status != TicketStatus.Resolved, ct);
+        ticket?.Touch(message.ProviderTimestamp);
+
         await db.SaveChangesAsync(ct);
+        if (ticket is not null) await broadcast.UpsertedAsync(ticket.Id, ct);
+
         return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes);
     }
 

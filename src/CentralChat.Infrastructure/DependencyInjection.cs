@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IDirectoryService, DirectoryService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IUserAdminService, UserAdminService>();
+        services.AddScoped<ITicketBroadcaster, TicketBroadcaster>();
         services.AddScoped<IMediaService, MediaService>();
         services.AddSingleton<IMediaStore, FileSystemMediaStore>();
         services.AddSingleton<RabbitConnection>(); services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();

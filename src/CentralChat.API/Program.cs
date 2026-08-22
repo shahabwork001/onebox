@@ -25,7 +25,9 @@ builder.Services.AddAuthorization(o =>
     foreach (var permission in new[] { Permissions.ContactsView, Permissions.TicketsView, Permissions.TicketsClaim, Permissions.TicketsAssign, Permissions.TicketsResolve, Permissions.MessagesView, Permissions.MessagesSend, Permissions.UsersManage, Permissions.SettingsManage })
         o.AddPolicy(permission, p => p.RequireClaim("permission", permission));
 });
-var signalR = builder.Services.AddSignalR(); var redis = builder.Configuration.GetConnectionString("Redis"); if (!string.IsNullOrWhiteSpace(redis)) signalR.AddStackExchangeRedis(redis);
+// SignalR serialises with its own options, so without this the hub sends enums as integers while the
+// REST API sends them as strings — the same entity arriving in two different shapes.
+var signalR = builder.Services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter())); var redis = builder.Configuration.GetConnectionString("Redis"); if (!string.IsNullOrWhiteSpace(redis)) signalR.AddStackExchangeRedis(redis);
 builder.Services.AddRateLimiter(o =>
 {
     o.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));

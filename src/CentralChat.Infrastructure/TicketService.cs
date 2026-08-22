@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CentralChat.Infrastructure;
 
-public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier realtime) : ITicketService
+public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier realtime, ITicketBroadcaster broadcast) : ITicketService
 {
     public async Task<PagedResult<TicketListItem>> ListAsync(string scope, string? status, Guid userId, int page, int pageSize, CancellationToken ct)
     {
@@ -43,8 +43,7 @@ public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier rea
         db.AssignmentHistory.Add(new ContactAssignmentHistory(ticket.ContactId, ticket.Id, null, userId, userId, AssignmentAction.Claimed, null));
         db.AuditLogs.Add(new AuditLog { UserId = userId, Action = "ticket.claimed", EntityType = "Ticket", EntityId = ticketId.ToString(), NewValues = JsonSerializer.Serialize(new { AssignedAgentId = userId }) });
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
-        await realtime.UserAsync(userId, "ticket.claimed", new { ticketId, assignedAgentId = userId }, ct);
-        await realtime.UnassignedAsync("ticket.removed", new { ticketId }, ct);
+        await broadcast.UpsertedAsync(ticketId, ct);
     }
 
     public Task AssignAsync(Guid ticketId, Guid agentId, Guid changedBy, string? reason, CancellationToken ct) => ChangeAssignmentAsync(ticketId, agentId, changedBy, reason, ct);
@@ -74,8 +73,7 @@ public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier rea
         db.AssignmentHistory.Add(new ContactAssignmentHistory(contact.Id, ticket.Id, previous, agentId, changedBy, action, reason));
         db.AuditLogs.Add(new AuditLog { UserId = changedBy, Action = $"ticket.{action.ToString().ToLowerInvariant()}", EntityType = "Ticket", EntityId = ticketId.ToString(), OldValues = JsonSerializer.Serialize(new { AssignedAgentId = previous }), NewValues = JsonSerializer.Serialize(new { AssignedAgentId = agentId }) });
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
-        if (previous.HasValue) await realtime.UserAsync(previous.Value, "ticket.assignment.removed", new { ticketId }, ct);
-        if (agentId.HasValue) await realtime.UserAsync(agentId.Value, "ticket.assignment.added", new { ticketId }, ct); else await realtime.UnassignedAsync("ticket.created", new { ticketId }, ct);
+        await broadcast.UpsertedAsync(ticketId, ct);
     }
 
     private async Task ChangeStatusAsync(Guid ticketId, TicketStatus target, Guid userId, bool privileged, string? reason, CancellationToken ct)
@@ -106,7 +104,6 @@ public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier rea
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         var payload = new { ticketId, status = ticket.Status.ToString(), previousStatus = previous.ToString(), conversationId = ticket.ConversationId };
         await realtime.ConversationAsync(ticket.ConversationId, "ticket.status.changed", payload, ct);
-        if (ticket.AssignedAgentId.HasValue) await realtime.UserAsync(ticket.AssignedAgentId.Value, "ticket.status.changed", payload, ct);
-        else await realtime.UnassignedAsync("ticket.status.changed", payload, ct);
+        await broadcast.UpsertedAsync(ticketId, ct);
     }
 }
