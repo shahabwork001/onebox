@@ -26,11 +26,33 @@ public sealed class ConversationService(CentralChatDbContext db) : IConversation
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length > 4096) throw new ValidationException("Message text is required and must not exceed 4096 characters.");
         var conversation = await GetAsync(id, userId, privileged, ct);
+        await EnsureWithinSessionWindowAsync(id, ct);
         var channelId = await db.Conversations.Where(x => x.Id == id).Select(x => x.ChannelId).SingleAsync(ct);
         var message = new ChatMessage(id, conversation.ContactId, channelId, MessageDirection.Outbound, MessageType.Text, text.Trim(), null, DateTimeOffset.UtcNow); message.SetSender(userId);
         db.ChatMessages.Add(message);
         db.OutboxMessages.Add(new OutboxMessage { Type = "OutboundWhatsAppMessageRequested", Payload = JsonSerializer.Serialize(new { MessageId = message.Id }) });
         await db.SaveChangesAsync(ct);
         return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes);
+    }
+
+    /// <summary>
+    /// WhatsApp only accepts a free-form message within 24 hours of the customer's last one; outside
+    /// that it requires an approved template. Meta would reject the send anyway, but only after the
+    /// message had been stored and queued, leaving the agent an unexplained failed tick. Refusing here
+    /// means they are told why while the text is still in the composer.
+    /// </summary>
+    private static readonly TimeSpan SessionWindow = TimeSpan.FromHours(24);
+
+    private async Task EnsureWithinSessionWindowAsync(Guid conversationId, CancellationToken ct)
+    {
+        var lastInbound = await db.ChatMessages.AsNoTracking()
+            .Where(x => x.ConversationId == conversationId && x.Direction == MessageDirection.Inbound)
+            .MaxAsync(x => (DateTimeOffset?)x.ProviderTimestamp, ct);
+
+        if (lastInbound is null)
+            throw new ConflictException("WhatsApp does not allow starting a conversation with a free-form message. An approved message template is required.");
+
+        if (DateTimeOffset.UtcNow - lastInbound.Value > SessionWindow)
+            throw new ConflictException("This conversation is outside WhatsApp's 24-hour reply window. An approved message template is required to reply.");
     }
 }

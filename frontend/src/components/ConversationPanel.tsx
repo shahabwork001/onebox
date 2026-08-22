@@ -2,13 +2,13 @@
 
 import { FormEvent, useEffect, useRef } from "react";
 import type { Agent, Message, Ticket } from "@/lib/types";
-import { hasAttachment, isPending, isTerminal, isUnclaimed } from "@/lib/types";
-import { dayKeyOf, formatDayHeading, formatTime } from "@/lib/format";
+import { hasAttachment, isPending, isTerminal, isUnclaimed, sessionWindowOf } from "@/lib/types";
+import { dayKeyOf, formatDayHeading, formatDuration, formatTime } from "@/lib/format";
 import { ActionMenu, type MenuAction } from "./ActionMenu";
 import { AssignMenu } from "./AssignMenu";
 import { MediaAttachment } from "./MediaAttachment";
 import { Avatar, DeliveryTick, EmptyState, Spinner, StatusBadge } from "./Primitives";
-import { IconBack, IconLock, IconMessage, IconSelect, IconSend } from "./icons";
+import { IconBack, IconClock, IconLock, IconMessage, IconSelect, IconSend } from "./icons";
 
 export type ConversationActions = {
   onClaim: () => void;
@@ -87,9 +87,16 @@ export function ConversationPanel({
 
   const terminal = isTerminal(ticket);
   const unclaimed = isUnclaimed(ticket);
-  const canReply = isOwner && !terminal && !forbidden;
+  const replyWindow = sessionWindowOf(messages);
+  // Only meaningful once the transcript is present; an empty list during load is not a closed window.
+  const windowKnown = !loading && !forbidden && messages.length > 0;
+  const windowClosed = windowKnown && !replyWindow.open;
+  const canReply = isOwner && !terminal && !forbidden && !windowClosed;
+  const closingSoon = replyWindow.open && replyWindow.secondsRemaining < 4 * 3600;
 
-  const composerPlaceholder = terminal
+  const composerPlaceholder = windowClosed
+    ? "Outside WhatsApp's 24-hour reply window"
+    : terminal
     ? "Reopen this ticket to reply"
     : unclaimed
       ? "Claim this conversation to reply"
@@ -172,6 +179,29 @@ export function ConversationPanel({
         )}
         <div ref={bottom} />
       </div>
+
+      {windowClosed && isOwner && !terminal && (
+        <div className="window-notice" role="status">
+          <IconClock size={17} />
+          <div>
+            <b>Outside the 24-hour reply window</b>
+            <span>
+              WhatsApp only allows a free-form reply within 24 hours of the customer&apos;s last message. Replying
+              now requires an approved message template.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {closingSoon && canReply && (
+        <div className="window-notice is-warning" role="status">
+          <IconClock size={17} />
+          <div>
+            <b>{formatDuration(replyWindow.secondsRemaining)} left to reply</b>
+            <span>After that a template is required, so answer before the window closes.</span>
+          </div>
+        </div>
+      )}
 
       <form className="composer" onSubmit={submit}>
         <textarea

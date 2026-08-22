@@ -731,6 +731,43 @@ button:disabled {
   font-weight: 600;
 }
 
+/* Sits directly above the composer, where the agent is looking when they intend to reply. */
+.window-notice {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--canvas);
+  color: var(--ink-muted);
+}
+
+.window-notice.is-warning {
+  background: var(--warning-soft);
+  border-top-color: var(--warning-line);
+  color: var(--warning);
+}
+
+.window-notice b,
+.window-notice span {
+  display: block;
+}
+
+.window-notice b {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.window-notice.is-warning b {
+  color: var(--warning);
+}
+
+.window-notice span {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
 .composer {
   flex: 0 0 auto;
   background: var(--surface);

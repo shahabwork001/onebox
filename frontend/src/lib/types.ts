@@ -71,6 +71,25 @@ export function draftMessage(conversationId: string, text: string): Message {
   };
 }
 
+/**
+ * WhatsApp only accepts a free-form reply within 24 hours of the customer's last message. Knowing this
+ * before typing is the difference between a clear explanation and an unexplained failure after sending.
+ */
+export const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export type SessionWindow = { open: boolean; expiresAt: number | null; secondsRemaining: number };
+
+export function sessionWindowOf(messages: Message[]): SessionWindow {
+  let lastInbound: Message | undefined;
+  for (const message of messages) if (message.direction === "Inbound") lastInbound = message;
+
+  if (!lastInbound) return { open: false, expiresAt: null, secondsRemaining: 0 };
+
+  const expiresAt = new Date(lastInbound.timestamp).getTime() + SESSION_WINDOW_MS;
+  const secondsRemaining = Math.max((expiresAt - Date.now()) / 1000, 0);
+  return { open: secondsRemaining > 0, expiresAt, secondsRemaining };
+}
+
 export const hasAttachment = (message: Pick<Message, "type">) =>
   message.type !== "Text" && message.type !== "Unknown";
 
