@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, api, refreshSession } from "@/lib/api";
 import { clearSession, readSession, writeSession } from "@/lib/session";
+import { DEFAULT_ROUTE, buildPath, parseRoute } from "@/lib/routing";
 import {
   PERMISSIONS,
   isFullWidthView,
@@ -16,14 +17,14 @@ import {
   type View,
 } from "@/lib/types";
 import { useRealtime } from "@/hooks/useRealtime";
-import { LoginView } from "@/components/LoginView";
-import { Sidebar } from "@/components/Sidebar";
-import { InboxPanel } from "@/components/InboxPanel";
-import { ConversationPanel } from "@/components/ConversationPanel";
-import { DashboardView } from "@/components/DashboardView";
-import { QueueTable } from "@/components/QueueTable";
+import { LoginView } from "./LoginView";
+import { Sidebar } from "./Sidebar";
+import { InboxPanel } from "./InboxPanel";
+import { ConversationPanel } from "./ConversationPanel";
+import { DashboardView } from "./DashboardView";
+import { QueueTable } from "./QueueTable";
 
-export default function Workspace() {
+export function Workspace() {
   const [auth, setAuth] = useState<Auth | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -54,9 +55,25 @@ export default function Workspace() {
   const canAssign = !!auth?.user.permissions.includes(PERMISSIONS.ticketsAssign);
 
   useEffect(() => {
+    const applyUrl = () => {
+      const route = parseRoute(window.location.pathname);
+      setView(route.view);
+      setSelectedId(route.ticketId);
+    };
+    applyUrl();
     setAuth(readSession());
     setReady(true);
+
+    // Back and forward should move between screens, not out of the application.
+    window.addEventListener("popstate", applyUrl);
+    return () => window.removeEventListener("popstate", applyUrl);
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const path = buildPath(auth ? { view, ticketId: selectedId } : DEFAULT_ROUTE);
+    if (window.location.pathname !== path) window.history.pushState(null, "", path);
+  }, [ready, auth, view, selectedId]);
 
   const signOut = useCallback(() => {
     clearSession();
