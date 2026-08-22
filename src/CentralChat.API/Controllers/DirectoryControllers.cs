@@ -1,17 +1,18 @@
 using CentralChat.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CentralChat.API.Controllers;
 
-[ApiController, Route("api/contacts"), Authorize(Policy = Permissions.ContactsView)]
+[ApiController, Route("api/contacts"), Authorize(Policy = Permissions.ContactsView), EnableRateLimiting("api")]
 public sealed class ContactsController(IDirectoryService directory) : ControllerBase
 {
     [HttpGet] public Task<PagedResult<ContactDto>> List([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 30, CancellationToken ct = default) => directory.ContactsAsync(search, page, pageSize, ct);
     [HttpGet("{id:guid}")] public Task<ContactDto> Get(Guid id, CancellationToken ct) => directory.ContactAsync(id, ct);
 }
 
-[ApiController, Route("api/users"), Authorize(Policy = Permissions.TicketsAssign)]
+[ApiController, Route("api/users"), Authorize(Policy = Permissions.TicketsAssign), EnableRateLimiting("api")]
 public sealed class UsersController(IDirectoryService directory, IUserAdminService admin, ICurrentUser current) : ControllerBase
 {
     /// <summary>Assignment menus want only people who can still take work; management wants everyone.</summary>
@@ -32,7 +33,7 @@ public sealed class UsersController(IDirectoryService directory, IUserAdminServi
     }
 }
 
-[ApiController, Route("api/teams"), Authorize(Policy = Permissions.TicketsView)]
+[ApiController, Route("api/teams"), Authorize(Policy = Permissions.TicketsView), EnableRateLimiting("api")]
 public sealed class TeamsController(IDirectoryService directory) : ControllerBase
 {
     [HttpGet] public Task<IReadOnlyCollection<TeamDto>> List(CancellationToken ct) => directory.TeamsAsync(ct);

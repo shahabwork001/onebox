@@ -1,0 +1,14 @@
+{
+  "name": "onebox-loadtest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Simulates connected agents and inbound WhatsApp traffic against a running Onebox instance.",
+  "scripts": {
+    "start": "node loadtest.js"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^9.0.6",
+    "undici": "^8.10.0"
+  }
+}

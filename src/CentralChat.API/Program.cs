@@ -45,7 +45,10 @@ var app = builder.Build();
 app.UseMiddleware<ExceptionMiddleware>();
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseCors("frontend"); app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
-app.MapControllers().RequireRateLimiting("api"); app.MapHub<CommunicationHub>("/hubs/communication");
+// Deliberately not RequireRateLimiting("api") here. Endpoint policies stack rather than replace, so a
+// global one also applied to /webhook, and the stricter of the two won: Meta was capped at the API's
+// 120 requests a minute instead of the webhook's own thousand. Controllers name their policy.
+app.MapControllers(); app.MapHub<CommunicationHub>("/hubs/communication");
 app.MapHealthChecks("/health"); app.MapHealthChecks("/health/ready"); app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
 if (app.Configuration.GetValue<bool>("Database:ApplyMigrations")) await DatabaseInitializer.InitializeAsync(app.Services, app.Environment.IsDevelopment());
 if (!app.Environment.IsDevelopment())

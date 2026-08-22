@@ -250,6 +250,30 @@ cleanly. CI supplies one as a service container. Each test creates and drops its
 
 Still uncovered: outbox and inbox idempotency, concurrent claiming, and ownership denial on send.
 
+## Load testing
+
+`tools/loadtest` holds N live hub connections open while driving webhooks at a fixed rate, and reports
+latency percentiles rather than averages. Every connection is in the broadcast group, so N connections
+is what a single ticket change actually has to fan out to — which is the cost that matters.
+
+```powershell
+cd tools/loadtest
+npm install
+$env:BASE_URL = "http://127.0.0.1:8080"; $env:AGENTS = "100"; $env:RATE = "15"; $env:DURATION = "60"
+npm start
+```
+
+It writes real conversations, so point it at a local or staging instance, never at production.
+
+Measured on a four-core development machine at 100 agents and 15 inbound messages per second: 66,000
+hub events delivered over 45 seconds with no failures or disconnects, webhook p95 56&nbsp;ms and list
+p95 40&nbsp;ms. Failures are attributed to their cause, so a limit of the generator is never reported
+as a limit of the server.
+
+Two ceilings are worth knowing. The webhook policy permits 1000 requests a minute, roughly 16 a
+second. Ticket list search is applied in the browser over the loaded page, so it does not see
+conversations beyond it.
+
 ## Realtime event names
 
 The hub uses targeted `user:{id}`, `conversation:{id}`, and `unassigned` groups. Current events include `message.received`, `message.sent`, `message.failed`, `ticket.created`, `ticket.claimed`, `ticket.removed`, `ticket.assignment.added`, `ticket.assignment.removed`, and `ticket.status.changed`. Clients reconnect automatically and refresh REST state.

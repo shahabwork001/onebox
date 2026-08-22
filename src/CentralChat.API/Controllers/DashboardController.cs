@@ -1,10 +1,11 @@
 using CentralChat.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CentralChat.API.Controllers;
 
-[ApiController, Route("api/dashboard"), Authorize(Policy = Permissions.TicketsView)]
+[ApiController, Route("api/dashboard"), Authorize(Policy = Permissions.TicketsView), EnableRateLimiting("api")]
 public sealed class DashboardController(IDashboardService dashboard, ICurrentUser current) : ControllerBase
 {
     // Agent breakdowns are only returned to callers who may already reassign work.

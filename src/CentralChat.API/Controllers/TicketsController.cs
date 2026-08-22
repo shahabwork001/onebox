@@ -1,10 +1,11 @@
 using CentralChat.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CentralChat.API.Controllers;
 
-[ApiController, Route("api/tickets"), Authorize(Policy = Permissions.TicketsView)]
+[ApiController, Route("api/tickets"), Authorize(Policy = Permissions.TicketsView), EnableRateLimiting("api")]
 public sealed class TicketsController(ITicketService tickets, ICurrentUser current) : ControllerBase
 {
     private bool Privileged => current.HasPermission(Permissions.TicketsAssign);
