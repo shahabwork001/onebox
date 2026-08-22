@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef } from "react";
 import type { Agent, Message, Ticket } from "@/lib/types";
 import { hasAttachment, isTerminal, isUnclaimed } from "@/lib/types";
 import { dayKeyOf, formatDayHeading, formatTime } from "@/lib/format";
+import { ActionMenu, type MenuAction } from "./ActionMenu";
 import { AssignMenu } from "./AssignMenu";
 import { MediaAttachment } from "./MediaAttachment";
 import { Avatar, DeliveryTick, EmptyState, Spinner, StatusBadge } from "./Primitives";
@@ -78,6 +79,12 @@ export function ConversationPanel({
         ? "Type a reply…"
         : `Assigned to ${ownerName ?? "another agent"}`;
 
+  // Everything except the one action an agent came to perform goes behind the overflow trigger.
+  const secondary: MenuAction[] = [];
+  if (!unclaimed && !terminal && (isOwner || canAssign)) secondary.push({ label: "Release to queue", onSelect: actions.onRelease });
+  if ((isOwner || canAssign) && !terminal) secondary.push({ label: "Resolve", onSelect: () => actions.onChangeStatus("resolve") });
+  if ((isOwner || canAssign) && ticket.status !== "Closed") secondary.push({ label: "Close", onSelect: () => actions.onChangeStatus("close"), tone: "danger" });
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (composer.trim()) actions.onSend(composer.trim());
@@ -93,54 +100,17 @@ export function ConversationPanel({
         <Avatar name={ticket.contactName} size="lg" />
         <div className="conversation-identity">
           <h2>{ticket.contactName || ticket.phoneNumber}</h2>
-          <p>
-            <span>{ticket.phoneNumber}</span>
-            <span className="dot" aria-hidden="true">
-              ·
-            </span>
-            <span>{ticket.number}</span>
+          <p title={`${ticket.number} · ${ownerName ? `assigned to ${ownerName}` : "unassigned"}`}>
+            <span className="identity-phone">{ticket.phoneNumber}</span>
             <StatusBadge status={ticket.status} unclaimed={unclaimed} />
-            {ownerName && <span className="assigned-to">Assigned to {ownerName}</span>}
+            {ownerName && <span className="assigned-to">{ownerName}</span>}
           </p>
         </div>
 
         <div className="actions">
           {unclaimed && (
             <button type="button" className="button button-primary" disabled={busy} onClick={actions.onClaim}>
-              Claim conversation
-            </button>
-          )}
-          {!unclaimed && !terminal && (isOwner || canAssign) && (
-            <button type="button" className="button button-ghost" disabled={busy} onClick={actions.onRelease}>
-              Release to queue
-            </button>
-          )}
-          {canAssign && !terminal && (
-            <AssignMenu
-              agents={agents}
-              assignedAgentId={ticket.assignedAgentId}
-              busy={busy}
-              onAssign={actions.onAssign}
-            />
-          )}
-          {(isOwner || canAssign) && !terminal && (
-            <button
-              type="button"
-              className="button button-ghost"
-              disabled={busy}
-              onClick={() => actions.onChangeStatus("resolve")}
-            >
-              Resolve
-            </button>
-          )}
-          {(isOwner || canAssign) && ticket.status !== "Closed" && (
-            <button
-              type="button"
-              className="button button-ghost"
-              disabled={busy}
-              onClick={() => actions.onChangeStatus("close")}
-            >
-              Close
+              Claim
             </button>
           )}
           {(isOwner || canAssign) && terminal && (
@@ -153,6 +123,15 @@ export function ConversationPanel({
               Reopen
             </button>
           )}
+          {canAssign && !terminal && (
+            <AssignMenu
+              agents={agents}
+              assignedAgentId={ticket.assignedAgentId}
+              busy={busy}
+              onAssign={actions.onAssign}
+            />
+          )}
+          <ActionMenu actions={secondary} busy={busy} />
         </div>
       </header>
 
