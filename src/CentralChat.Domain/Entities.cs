@@ -93,6 +93,8 @@ public sealed class ChatMessage : Entity
     public MessageStatus Status { get; private set; }
     public string? MimeType { get; private set; }
     public string? MediaUrl { get; private set; }
+    public string? MediaId { get; private set; }
+    public long? MediaSizeBytes { get; private set; }
     public DateTimeOffset ProviderTimestamp { get; private set; }
     public DateTimeOffset? SentAt { get; private set; }
     public DateTimeOffset? DeliveredAt { get; private set; }
@@ -101,6 +103,12 @@ public sealed class ChatMessage : Entity
     public string? FailureReason { get; private set; }
     public string? RawPayload { get; private set; }
     public void SetSender(Guid userId) => SenderUserId = userId;
+
+    // Media arrives as a provider id only. The binary is fetched afterwards by a queued job, so a
+    // message is readable in the inbox immediately and the download can fail and retry on its own.
+    public void SetProviderMedia(string mediaId, string? mimeType) { MediaId = mediaId; MimeType = mimeType; UpdatedAt = DateTimeOffset.UtcNow; }
+    public void SetStoredMedia(string storageKey, string? mimeType, long sizeBytes) { MediaUrl = storageKey; if (mimeType is not null) MimeType = mimeType; MediaSizeBytes = sizeBytes; UpdatedAt = DateTimeOffset.UtcNow; }
+    public bool HasStoredMedia => !string.IsNullOrEmpty(MediaUrl);
     public void MarkSent(string externalId) { ExternalMessageId = externalId; Status = MessageStatus.Sent; SentAt = DateTimeOffset.UtcNow; UpdatedAt = DateTimeOffset.UtcNow; }
     public void MarkFailed(string reason) { Status = MessageStatus.Failed; FailureReason = reason; FailedAt = DateTimeOffset.UtcNow; UpdatedAt = DateTimeOffset.UtcNow; }
     public void ApplyStatus(MessageStatus status, DateTimeOffset at) { Status = status; if (status == MessageStatus.Delivered) DeliveredAt = at; if (status == MessageStatus.Read) ReadAt = at; UpdatedAt = DateTimeOffset.UtcNow; }

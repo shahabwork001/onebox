@@ -19,7 +19,7 @@ public sealed class ConversationService(CentralChatDbContext db) : IConversation
         await GetAsync(id, userId, privileged, ct); limit = Math.Clamp(limit, 1, 100);
         var query = db.ChatMessages.AsNoTracking().Where(x => x.ConversationId == id);
         if (beforeId.HasValue) { var cursor = await db.ChatMessages.AsNoTracking().SingleOrDefaultAsync(x => x.Id == beforeId, ct) ?? throw new NotFoundException("Message cursor not found."); query = query.Where(x => x.ProviderTimestamp < cursor.ProviderTimestamp); }
-        return await query.OrderByDescending(x => x.ProviderTimestamp).ThenByDescending(x => x.Id).Take(limit).Select(x => new MessageDto(x.Id, x.ConversationId, x.Direction, x.Type, x.TextBody, x.Status, x.ProviderTimestamp, x.ExternalMessageId)).ToListAsync(ct);
+        return await query.OrderByDescending(x => x.ProviderTimestamp).ThenByDescending(x => x.Id).Take(limit).Select(x => new MessageDto(x.Id, x.ConversationId, x.Direction, x.Type, x.TextBody, x.Status, x.ProviderTimestamp, x.ExternalMessageId, x.MimeType, x.MediaUrl != null, x.MediaSizeBytes)).ToListAsync(ct);
     }
 
     public async Task<MessageDto> SendAsync(Guid id, string text, Guid userId, bool privileged, CancellationToken ct)
@@ -31,6 +31,6 @@ public sealed class ConversationService(CentralChatDbContext db) : IConversation
         db.ChatMessages.Add(message);
         db.OutboxMessages.Add(new OutboxMessage { Type = "OutboundWhatsAppMessageRequested", Payload = JsonSerializer.Serialize(new { MessageId = message.Id }) });
         await db.SaveChangesAsync(ct);
-        return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null);
+        return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes);
     }
 }

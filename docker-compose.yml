@@ -60,6 +60,7 @@ services:
       Bootstrap__AgentEmails: ${BOOTSTRAP_AGENT_EMAILS:-}
       Bootstrap__AgentPassword: ${BOOTSTRAP_AGENT_PASSWORD:-}
       Bootstrap__TeamName: ${BOOTSTRAP_TEAM_NAME:-Support}
+    volumes: ["centralchat_media:/var/lib/onebox/media"]
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -74,6 +75,7 @@ services:
     ports: ["3000:3000"]
     depends_on: [api]
 volumes:
+  centralchat_media:
   centralchat_postgres18:
   centralchat_redis:
   centralchat_rabbitmq:

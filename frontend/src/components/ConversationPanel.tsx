@@ -2,10 +2,12 @@
 
 import { FormEvent, useEffect, useRef } from "react";
 import type { Agent, Message, Ticket } from "@/lib/types";
-import { isTerminal, isUnclaimed } from "@/lib/types";
+import { hasAttachment, isTerminal, isUnclaimed } from "@/lib/types";
 import { dayKeyOf, formatDayHeading, formatTime } from "@/lib/format";
 import { AssignMenu } from "./AssignMenu";
+import { MediaAttachment } from "./MediaAttachment";
 import { Avatar, DeliveryTick, EmptyState, Spinner, StatusBadge } from "./Primitives";
+import { IconBack, IconLock, IconMessage, IconSelect, IconSend } from "./icons";
 
 export type ConversationActions = {
   onClaim: () => void;
@@ -26,6 +28,7 @@ export function ConversationPanel({
   canAssign,
   isOwner,
   composer,
+  token,
   onComposerChange,
   onBack,
   actions,
@@ -40,6 +43,7 @@ export function ConversationPanel({
   canAssign: boolean;
   isOwner: boolean;
   composer: string;
+  token: string;
   onComposerChange: (value: string) => void;
   onBack: () => void;
   actions: ConversationActions;
@@ -54,7 +58,7 @@ export function ConversationPanel({
     return (
       <section className="conversation">
         <EmptyState
-          icon="◌"
+          icon={<IconSelect size={30} />}
           title="Select a conversation"
           body="Choose a contact from the inbox to read the history and reply."
         />
@@ -84,9 +88,7 @@ export function ConversationPanel({
       <header className="panel-header conversation-header">
         {/* Only rendered on narrow layouts, where the list and the thread share one column. */}
         <button type="button" className="back-button" onClick={onBack} aria-label="Back to conversations">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <IconBack size={19} />
         </button>
         <Avatar name={ticket.contactName} size="lg" />
         <div className="conversation-identity">
@@ -157,16 +159,16 @@ export function ConversationPanel({
       <div className="messages">
         {forbidden ? (
           <EmptyState
-            icon="🔒"
+            icon={<IconLock size={28} />}
             title="Claim to read this conversation"
             body="This conversation is not assigned to you. Claim it from the header to open the history and reply."
           />
         ) : loading ? (
           <Spinner label="Loading messages…" />
         ) : messages.length === 0 ? (
-          <EmptyState icon="✉" title="No messages yet" body="Nothing has been exchanged on this ticket." />
+          <EmptyState icon={<IconMessage size={28} />} title="No messages yet" body="Nothing has been exchanged on this ticket." />
         ) : (
-          <MessageStream messages={messages} />
+          <MessageStream messages={messages} token={token} />
         )}
         <div ref={bottom} />
       </div>
@@ -185,15 +187,16 @@ export function ConversationPanel({
             }
           }}
         />
-        <button type="submit" className="button button-primary" disabled={!canReply || busy || !composer.trim()}>
-          Send
+        <button type="submit" className="button button-primary composer-send" disabled={!canReply || busy || !composer.trim()}>
+          <IconSend size={16} />
+          <span>Send</span>
         </button>
       </form>
     </section>
   );
 }
 
-function MessageStream({ messages }: { messages: Message[] }) {
+function MessageStream({ messages, token }: { messages: Message[]; token: string }) {
   let lastDay = "";
 
   return (
@@ -208,7 +211,9 @@ function MessageStream({ messages }: { messages: Message[] }) {
           <div key={message.id} className="message-group">
             {heading && <div className="day-divider">{heading}</div>}
             <div className={outbound ? "bubble bubble-outbound" : "bubble bubble-inbound"}>
-              <p>{message.text || `Unsupported ${message.type.toLowerCase()} message`}</p>
+              {hasAttachment(message) && <MediaAttachment message={message} token={token} />}
+              {message.text && <p>{message.text}</p>}
+              {!message.text && !hasAttachment(message) && <p className="message-empty">No content</p>}
               <small>
                 <time dateTime={message.timestamp}>{formatTime(message.timestamp)}</time>
                 {outbound && <DeliveryTick status={message.status} />}

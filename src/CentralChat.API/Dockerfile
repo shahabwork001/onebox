@@ -6,6 +6,9 @@ RUN --mount=type=cache,id=centralchat-nuget-v2,target=/root/.nuget/packages dotn
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app .
+# Docker seeds a new named volume from the image path it is mounted at, ownership included. Creating
+# these as the app user is what lets a non-root container write media and persist data-protection keys.
+RUN mkdir -p /var/lib/onebox/media /home/app/.aspnet/DataProtection-Keys  && chown -R $APP_UID:$APP_UID /var/lib/onebox /home/app/.aspnet
 USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "CentralChat.API.dll"]

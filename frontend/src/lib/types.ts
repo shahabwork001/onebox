@@ -40,7 +40,14 @@ export type Message = {
   status: MessageStatus;
   timestamp: string;
   externalMessageId: string | null;
+  mimeType: string | null;
+  /** False while the provider binary is still being fetched by the queued download job. */
+  mediaReady: boolean;
+  mediaSizeBytes: number | null;
 };
+
+export const hasAttachment = (message: Pick<Message, "type">) =>
+  message.type !== "Text" && message.type !== "Unknown";
 
 export type Agent = {
   id: string;

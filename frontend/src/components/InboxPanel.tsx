@@ -2,6 +2,7 @@ import type { Scope, StatusFilter, Ticket } from "@/lib/types";
 import { isUnclaimed } from "@/lib/types";
 import { formatListTimestamp } from "@/lib/format";
 import { Avatar, OwnerChip, Spinner, StatusBadge } from "./Primitives";
+import { IconClose, IconRefresh, IconSearch } from "./icons";
 
 const FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "active", label: "Active" },
@@ -52,12 +53,12 @@ export function InboxPanel({
           </p>
         </div>
         <button type="button" className="icon-button" onClick={onRefresh} title="Refresh" aria-label="Refresh">
-          ↻
+          <IconRefresh size={17} />
         </button>
       </header>
 
       <div className="search">
-        <span aria-hidden="true">⌕</span>
+        <IconSearch size={16} />
         <input
           value={search}
           onChange={event => onSearchChange(event.target.value)}
@@ -66,7 +67,7 @@ export function InboxPanel({
         />
         {search && (
           <button type="button" className="search-clear" onClick={() => onSearchChange("")} aria-label="Clear search">
-            ×
+            <IconClose size={14} />
           </button>
         )}
       </div>

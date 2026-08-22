@@ -99,6 +99,11 @@ public sealed class RabbitConsumer(IServiceScopeFactory scopes, RabbitConnection
                 await scope.ServiceProvider.GetRequiredService<CentralChat.Application.IWebhookIngestionService>().ProcessAsync(id, ct);
             }
             else if (envelope.Type == "OutboundWhatsAppMessageRequested") await ProcessOutboundAsync(scope.ServiceProvider, envelope.Payload, ct);
+            else if (envelope.Type == "WhatsAppMediaDownloadRequested")
+            {
+                using var payload = JsonDocument.Parse(envelope.Payload); var messageId = payload.RootElement.GetProperty("MessageId").GetGuid();
+                await scope.ServiceProvider.GetRequiredService<CentralChat.Application.IMediaService>().DownloadAsync(messageId, ct);
+            }
             db.InboxMessages.Add(new InboxMessage { Consumer = "centralchat.work", MessageId = envelope.MessageId.ToString() }); await db.SaveChangesAsync(ct);
             _channel!.BasicAck(delivery.DeliveryTag, false);
         }

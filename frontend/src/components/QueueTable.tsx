@@ -1,6 +1,7 @@
 import type { Ticket } from "@/lib/types";
 import { formatDuration, formatListTimestamp, secondsSince } from "@/lib/format";
 import { Avatar, Spinner, StatusBadge } from "./Primitives";
+import { IconCheck, IconRefresh } from "./icons";
 
 /**
  * The unassigned queue as a worklist rather than a chat list: an agent can see who is waiting and how
@@ -32,7 +33,7 @@ export function QueueTable({
           </p>
         </div>
         <button type="button" className="icon-button" onClick={onRefresh} title="Refresh" aria-label="Refresh">
-          ↻
+          <IconRefresh size={17} />
         </button>
       </header>
 
@@ -41,7 +42,9 @@ export function QueueTable({
 
         {!loading && tickets.length === 0 && (
           <div className="queue-clear">
-            <div aria-hidden="true">✓</div>
+            <div aria-hidden="true">
+              <IconCheck size={26} />
+            </div>
             <h2>Queue is clear</h2>
             <p>Every conversation has an owner. New ones appear here the moment they arrive.</p>
           </div>

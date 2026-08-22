@@ -8,7 +8,7 @@ public record AuthResponse(string AccessToken, string RefreshToken, DateTimeOffs
 public record UserDto(Guid Id, string Email, string DisplayName, IReadOnlyCollection<string> Roles, IReadOnlyCollection<string> Permissions);
 public record TicketListItem(Guid Id, string Number, TicketStatus Status, TicketPriority Priority, Guid ContactId, string ContactName, string PhoneNumber, Guid ConversationId, Guid? AssignedAgentId, DateTimeOffset LastActivityAt, string? LastMessage);
 public record ConversationDto(Guid Id, Guid ContactId, string ContactName, string PhoneNumber, Guid? AssignedAgentId, Guid? TicketId);
-public record MessageDto(Guid Id, Guid ConversationId, MessageDirection Direction, MessageType Type, string? Text, MessageStatus Status, DateTimeOffset Timestamp, string? ExternalMessageId);
+public record MessageDto(Guid Id, Guid ConversationId, MessageDirection Direction, MessageType Type, string? Text, MessageStatus Status, DateTimeOffset Timestamp, string? ExternalMessageId, string? MimeType = null, bool MediaReady = false, long? MediaSizeBytes = null);
 public record SendMessageRequest(string Text);
 public record AssignTicketRequest(Guid AgentId, string? Reason);
 public record TicketStatusChangeRequest(string? Reason);
@@ -31,4 +31,6 @@ public record AgentWorkload(
 
 /// <summary>Agent rows are only populated for callers holding <c>tickets.assign</c>.</summary>
 public record DashboardDto(DashboardTotals Totals, IReadOnlyCollection<AgentWorkload> Agents);
+
+public record MediaContent(Stream Content, string MimeType, string FileName);
 

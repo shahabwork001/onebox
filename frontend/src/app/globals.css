@@ -1,41 +1,48 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------- design tokens */
-:root {
-  /* Brand — CentralChat green, kept as the single accent. */
-  --brand: #176b50;
-  --brand-hover: #125942;
-  --brand-strong: #0f5741;
-  --brand-soft: #e8f4ef;
-  --brand-rail: #142c25;
-  --brand-rail-hover: #24473c;
-  --brand-rail-text: #b8cbc4;
+  :root {
+  /* Brand — one accent, used sparingly. Chrome is neutral; colour marks state, not decoration. */
+  --brand: #0f6b4f;
+  --brand-strong: #0b5540;
+  --brand-soft: #eaf3ef;
+  --brand-line: #cfe3da;
 
-  /* Neutrals — corporate grey scale. */
-  --ink: #101828;
-  --ink-muted: #475467;
-  --ink-subtle: #667085;
-  --line: #e4e7ec;
-  --line-soft: #f0f2f4;
+  /* Rail — desaturated near-black with a green cast, not a saturated slab. */
+  --rail: #16211d;
+  --rail-hover: #22302a;
+  --rail-text: #9aaba4;
+  --rail-text-strong: #f2f5f4;
+  --rail-line: #2a3833;
+
+  /* Neutrals */
+  --ink: #16191d;
+  --ink-muted: #4a5157;
+  --ink-subtle: #6b737b;
+  --line: #e3e6e9;
+  --line-soft: #eef0f2;
   --surface: #ffffff;
-  --canvas: #f9fafb;
-  --chat-canvas: #f6f8f6;
+  --canvas: #f7f8f9;
+  --chat-canvas: #f4f6f5;
 
-  /* Status. */
-  --danger: #b42318;
-  --danger-soft: #fef3f2;
-  --warning: #b54708;
-  --warning-soft: #fffaeb;
-  --info: #175cd3;
-  --info-soft: #eff8ff;
+  /* State */
+  --danger: #a4262c;
+  --danger-soft: #fdf3f3;
+  --warning: #8a5a00;
+  --warning-soft: #fdf7ec;
+  --warning-line: #e8d5ac;
+  --info: #1c4f8f;
+  --info-soft: #eef4fb;
 
-  --radius: 8px;
-  --radius-lg: 12px;
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 6%);
-  --shadow-md: 0 4px 12px rgb(16 24 40 / 10%);
-  --shadow-lg: 0 12px 32px rgb(16 24 40 / 14%);
+  /* Geometry — restrained radii read as a tool, generous ones read as a toy. */
+  --radius: 6px;
+  --radius-lg: 8px;
+  --shadow-sm: 0 1px 1px rgb(22 25 29 / 4%);
+  --shadow-md: 0 2px 6px rgb(22 25 29 / 7%);
+  --shadow-lg: 0 8px 24px rgb(22 25 29 / 12%);
 
-  --font: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  --font: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 /* ---------------------------------------------------------------- base */
@@ -53,8 +60,22 @@ body {
   color: var(--ink);
   background: var(--canvas);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: 13.5px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv05" 1;
+}
+
+.icon {
+  flex: 0 0 auto;
+  display: block;
+}
+
+/* Numbers that change in place should not make the layout jitter. */
+.metric-value,
+.data-table .num,
+.ticket-meta time {
+  font-variant-numeric: tabular-nums;
 }
 
 button,
@@ -75,7 +96,8 @@ button:disabled {
 
 :focus-visible {
   outline: 2px solid var(--brand);
-  outline-offset: 2px;
+  outline-offset: 1px;
+  border-radius: 3px;
 }
 
 /* ---------------------------------------------------------------- shell */
@@ -102,9 +124,9 @@ button:disabled {
 
 .panel-header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.006em;
 }
 
 .panel-header p {
@@ -115,8 +137,9 @@ button:disabled {
 
 /* ---------------------------------------------------------------- sidebar */
 .sidebar {
-  background: var(--brand-rail);
-  color: #fff;
+  background: var(--rail);
+  color: var(--rail-text-strong);
+  border-right: 1px solid var(--rail-line);
   padding: 20px 12px;
   display: flex;
   flex-direction: column;
@@ -131,14 +154,16 @@ button:disabled {
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
-  background: #38b487;
+  background: var(--brand);
   color: #fff;
-  font-weight: 800;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.02em;
   flex: 0 0 auto;
 }
 
@@ -153,9 +178,9 @@ button:disabled {
 }
 
 .brand-copy small {
-  color: #98b5ab;
+  color: var(--rail-text);
   font-size: 11px;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .sidebar nav {
@@ -167,25 +192,26 @@ button:disabled {
 .nav-item {
   border: 0;
   background: transparent;
-  color: var(--brand-rail-text);
+  color: var(--rail-text);
   text-align: left;
-  padding: 10px 12px;
+  padding: 9px 10px;
   border-radius: var(--radius);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
 }
 
 .nav-item:hover {
-  background: var(--brand-rail-hover);
-  color: #fff;
+  background: var(--rail-hover);
+  color: var(--rail-text-strong);
 }
 
 .nav-item.is-active {
-  background: var(--brand-rail-hover);
-  color: #fff;
-  font-weight: 600;
+  background: var(--rail-hover);
+  color: var(--rail-text-strong);
+  font-weight: 500;
+  box-shadow: inset 2px 0 var(--brand);
 }
 
 .nav-label {
@@ -197,12 +223,14 @@ button:disabled {
 }
 
 .nav-count {
-  background: #38b487;
-  color: #06251b;
+  background: var(--brand);
+  color: #fff;
   font-size: 11px;
-  font-weight: 700;
-  border-radius: 10px;
-  padding: 1px 7px;
+  font-weight: 600;
+  border-radius: 9px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
 }
 
 .realtime {
@@ -210,9 +238,9 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 12px;
+  padding: 8px 10px;
   font-size: 11px;
-  color: #9ab4ab;
+  color: var(--rail-text);
 }
 
 .realtime-dot {
@@ -223,7 +251,7 @@ button:disabled {
 }
 
 .realtime-live .realtime-dot {
-  background: #4ade80;
+  background: #3fae7f;
 }
 
 .realtime-connecting .realtime-dot {
@@ -235,8 +263,8 @@ button:disabled {
 }
 
 .profile {
-  padding: 14px 8px 0;
-  border-top: 1px solid #2b493f;
+  padding: 12px 6px 0;
+  border-top: 1px solid var(--rail-line);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -261,22 +289,24 @@ button:disabled {
 }
 
 .profile-copy small {
-  font-size: 10px;
-  color: #9ab4ab;
-  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--rail-text);
+  margin-top: 1px;
 }
 
 .profile-signout {
   background: none;
   border: 0;
-  color: #aac0b8;
-  padding: 4px;
-  border-radius: 6px;
+  color: var(--rail-text);
+  padding: 6px;
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
 }
 
 .profile-signout:hover {
-  background: var(--brand-rail-hover);
-  color: #fff;
+  background: var(--rail-hover);
+  color: var(--rail-text-strong);
 }
 
 /* ---------------------------------------------------------------- inbox list */
@@ -351,8 +381,8 @@ button:disabled {
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink-muted);
-  border-radius: 20px;
-  padding: 4px 11px;
+  border-radius: var(--radius);
+  padding: 4px 10px;
   font-size: 12px;
 }
 
@@ -436,12 +466,13 @@ button:disabled {
 
 .owner-chip {
   display: inline-block;
-  margin-top: 6px;
+  margin-top: 5px;
   font-size: 11px;
   color: var(--ink-muted);
   background: var(--line-soft);
+  border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 1px 6px;
+  padding: 0 5px;
 }
 
 .list-empty {
@@ -539,12 +570,11 @@ button:disabled {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 22px 8%;
+  padding: 20px 8%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background-image: radial-gradient(#dde4df 0.7px, transparent 0.7px);
-  background-size: 17px 17px;
+  gap: 6px;
+  background: var(--chat-canvas);
 }
 
 .message-group {
@@ -557,21 +587,24 @@ button:disabled {
   border: 1px solid var(--line);
   color: var(--ink-subtle);
   font-size: 11px;
-  padding: 3px 12px;
-  border-radius: 12px;
-  margin: 10px 0 4px;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 10px;
+  margin: 12px 0 6px;
 }
 
 .bubble {
-  max-width: 68%;
-  padding: 9px 13px;
+  max-width: 62%;
+  padding: 8px 11px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  border: 1px solid transparent;
 }
 
 .bubble p {
   margin: 0;
   font-size: 13.5px;
+  color: var(--ink);
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -590,18 +623,27 @@ button:disabled {
 .bubble-inbound {
   align-self: flex-start;
   background: var(--surface);
+  border-color: var(--line);
   border-top-left-radius: 2px;
 }
 
 .bubble-outbound {
   align-self: flex-end;
-  background: #dff2e9;
+  background: var(--brand-soft);
+  border-color: var(--brand-line);
   border-top-right-radius: 2px;
+}
+
+.message-empty {
+  font-style: italic;
+  color: var(--ink-subtle);
 }
 
 .tick {
   font-size: 10px;
   color: var(--ink-subtle);
+  display: inline-flex;
+  align-items: center;
 }
 
 .tick-read {
@@ -647,11 +689,21 @@ button:disabled {
 /* ---------------------------------------------------------------- buttons */
 .button {
   border-radius: var(--radius);
-  padding: 8px 14px;
+  padding: 7px 13px;
   font-size: 13px;
   font-weight: 500;
   border: 1px solid transparent;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.composer-send {
+  height: 38px;
+  padding: 0 16px;
 }
 
 .button-primary {
@@ -683,8 +735,9 @@ button:disabled {
 .badge {
   font-size: 11px;
   font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  border: 1px solid transparent;
   white-space: nowrap;
   background: var(--line-soft);
   color: var(--ink-muted);
@@ -692,6 +745,7 @@ button:disabled {
 
 .badge-unclaimed {
   background: var(--warning-soft);
+  border-color: var(--warning-line);
   color: var(--warning);
   font-weight: 600;
 }
@@ -719,10 +773,11 @@ button:disabled {
 
 .avatar {
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   background: var(--brand-soft);
+  border: 1px solid var(--brand-line);
   color: var(--brand-strong);
   font-weight: 600;
 }
@@ -835,15 +890,20 @@ button:disabled {
 }
 
 .empty-state-icon {
-  font-size: 44px;
-  line-height: 1;
-  color: #a9c5bb;
-  margin-bottom: 12px;
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink-subtle);
 }
 
 .empty-state h2 {
   color: var(--ink);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   margin: 0 0 6px;
 }
@@ -866,7 +926,7 @@ button:disabled {
 .spinner-dot {
   width: 14px;
   height: 14px;
-  border: 2px solid var(--line);
+  border: 2px solid var(--line-soft);
   border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -889,10 +949,10 @@ button:disabled {
   right: 20px;
   bottom: 20px;
   z-index: 50;
-  border: 0;
+  border: 1px solid #8c1f24;
   background: var(--danger);
   color: #fff;
-  padding: 12px 16px;
+  padding: 11px 15px;
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   font-size: 13px;
@@ -922,9 +982,9 @@ button:disabled {
 }
 
 .login-form h1 {
-  font-size: 30px;
+  font-size: 26px;
   letter-spacing: -0.02em;
-  margin: 0 0 8px;
+  margin: 0 0 6px;
 }
 
 .login-lede {
@@ -965,37 +1025,56 @@ button:disabled {
 }
 
 .login-art {
-  margin: 16px;
-  border-radius: 18px;
-  background: linear-gradient(145deg, #153e31, #24775b);
+  margin: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--rail);
+  border: 1px solid var(--rail-line);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
-  color: #fff;
-  padding: 10%;
-  text-align: center;
-}
-
-.login-art-mark {
-  font-size: 88px;
-  color: #63c7a1;
-  line-height: 1;
+  color: var(--rail-text-strong);
+  padding: 8%;
 }
 
 .login-art blockquote {
-  font-size: 26px;
-  line-height: 1.35;
-  max-width: 560px;
-  margin: 24px 0;
+  font-size: 22px;
+  line-height: 1.4;
+  max-width: 460px;
+  margin: 0 0 28px;
   font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
-.login-art p {
-  color: #b8d9cd;
-  font-size: 12px;
-  letter-spacing: 0.03em;
+.login-points {
+  list-style: none;
   margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  max-width: 460px;
+}
+
+.login-points li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--rail-text);
+}
+
+.login-points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+.callout-cta {
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- full-width screens */
@@ -1052,10 +1131,10 @@ button:disabled {
 }
 
 .metric-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
 }
 
 .metric-hint {
@@ -1064,7 +1143,7 @@ button:disabled {
 }
 
 .metric-warn {
-  border-color: #f5c16c;
+  border-color: var(--warning-line);
   background: var(--warning-soft);
 }
 
@@ -1078,7 +1157,7 @@ button:disabled {
 
 .queue-callout {
   width: 100%;
-  border: 1px solid #f5c16c;
+  border: 1px solid var(--warning-line);
   background: var(--warning-soft);
   color: var(--warning);
   border-radius: var(--radius-lg);
@@ -1220,10 +1299,15 @@ button:disabled {
 }
 
 .queue-clear div {
-  font-size: 40px;
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-lg);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-line);
   color: var(--brand);
-  line-height: 1;
-  margin-bottom: 10px;
 }
 
 .queue-clear h2 {
@@ -1235,6 +1319,94 @@ button:disabled {
 .queue-clear p {
   font-size: 13px;
   margin: 0;
+}
+
+/* ---------------------------------------------------------------- media in the transcript */
+.media-image {
+  display: block;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 6px;
+  max-width: 260px;
+  border: 1px solid var(--line);
+}
+
+.media-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: cover;
+}
+
+.media-player {
+  display: block;
+  width: 260px;
+  max-width: 100%;
+  margin-bottom: 6px;
+  border-radius: var(--radius);
+}
+
+audio.media-player {
+  height: 38px;
+}
+
+.media-file {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  min-width: 190px;
+}
+
+.media-file:hover {
+  border-color: var(--brand);
+}
+
+.media-file-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: var(--radius);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.media-file-copy b,
+.media-file-copy small {
+  display: block;
+}
+
+.media-file-copy b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.media-file-copy small {
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+
+/* Ingestion stores the message before the binary arrives, so this state is normal, not an error. */
+.media-pending,
+.media-failed {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ink-subtle);
+  font-style: italic;
+}
+
+.media-failed {
+  color: var(--danger);
 }
 
 /* ---------------------------------------------------------------- responsive */

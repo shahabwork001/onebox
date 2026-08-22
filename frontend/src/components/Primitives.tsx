@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { MessageStatus, TicketStatus } from "@/lib/types";
 import { initialsOf } from "@/lib/types";
 
@@ -20,11 +21,19 @@ export function StatusBadge({ status, unclaimed }: { status: TicketStatus; uncla
  */
 export function DeliveryTick({ status }: { status: MessageStatus }) {
   if (status === "Failed") return <span className="tick tick-failed">Failed</span>;
-  if (status === "Queued") return <span className="tick">Sending…</span>;
-  if (status === "Read") return <span className="tick tick-read">✓✓</span>;
-  if (status === "Delivered") return <span className="tick">✓✓</span>;
-  if (status === "Sent") return <span className="tick">✓</span>;
-  return null;
+  if (status === "Queued") return <span className="tick">Sending</span>;
+
+  const doubled = status === "Read" || status === "Delivered";
+  if (!doubled && status !== "Sent") return null;
+
+  return (
+    <span className={status === "Read" ? "tick tick-read" : "tick"} title={status}>
+      <svg viewBox="0 0 20 12" width="16" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M2 6.5L5.5 10L12 2" />
+        {doubled && <path d="M8.5 8.6L10 10l6.5-8" />}
+      </svg>
+    </span>
+  );
 }
 
 export function OwnerChip({ name }: { name: string | null }) {
@@ -32,7 +41,7 @@ export function OwnerChip({ name }: { name: string | null }) {
   return <span className="owner-chip">{name}</span>;
 }
 
-export function EmptyState({ icon, title, body }: { icon: string; title: string; body: string }) {
+export function EmptyState({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
   return (
     <div className="empty-state">
       <div className="empty-state-icon" aria-hidden="true">

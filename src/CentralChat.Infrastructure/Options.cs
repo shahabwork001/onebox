@@ -19,3 +19,13 @@ public sealed class RetentionOptions
     public int OutboxDays { get; set; } = 7; public int InboxDays { get; set; } = 7; public int WebhookEventDays { get; set; } = 30;
     public int IntervalHours { get; set; } = 24; public int StartupDelayMinutes { get; set; } = 5; public int BatchSize { get; set; } = 5000;
 }
+
+public sealed class MediaOptions
+{
+    public const string Section = "Media";
+    /// <summary>Container path backed by a Docker volume on the host.</summary>
+    public string Root { get; set; } = "/var/lib/onebox/media";
+    /// <summary>Meta caps WhatsApp media well below this; the limit exists so a bad download cannot fill the disk.</summary>
+    public long MaxBytes { get; set; } = 100L * 1024 * 1024;
+}
+

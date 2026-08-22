@@ -70,6 +70,7 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
     private async Task<List<(Guid? AgentId, Guid ConversationId, Guid TicketId, MessageDto Message)>> ProcessOnceAsync(Guid eventId, CancellationToken ct)
     {
         var notifications = new List<(Guid? AgentId, Guid ConversationId, Guid TicketId, MessageDto Message)>();
+        var mediaDownloads = new List<Guid>();
         var resolved = new ResolutionCache();
         var webhook = await db.WebhookEvents.SingleOrDefaultAsync(x => x.Id == eventId, ct) ?? throw new InvalidOperationException($"Webhook event {eventId} was not found.");
         if (webhook.ProcessingStatus == WebhookProcessingStatus.Processed) return notifications;
@@ -100,10 +101,13 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
                         var conversation = await ResolveConversationAsync(resolved, contact, channel, ct);
                         var ticket = await ResolveTicketAsync(resolved, contact, conversation, ct);
                         var timestamp = ParseTimestamp(incoming);
-                        var (type, body) = ExtractContent(incoming);
-                        var message = new ChatMessage(conversation.Id, contact.Id, channel.Id, MessageDirection.Inbound, type, body, externalId, timestamp);
+                        var content = ExtractContent(incoming);
+                        var message = new ChatMessage(conversation.Id, contact.Id, channel.Id, MessageDirection.Inbound, content.Type, content.Text, externalId, timestamp);
+                        // The binary is fetched by a queued job so the message is readable at once and a
+                        // failing download retries on its own instead of failing the whole webhook.
+                        if (!string.IsNullOrWhiteSpace(content.MediaId)) { message.SetProviderMedia(content.MediaId, content.MimeType); mediaDownloads.Add(message.Id); }
                         db.ChatMessages.Add(message); contact.Touch(timestamp); conversation.Touch(timestamp); ticket.Touch(timestamp);
-                        notifications.Add((contact.CurrentAssignedAgentId, conversation.Id, ticket.Id, new MessageDto(message.Id, conversation.Id, message.Direction, message.Type, message.TextBody, message.Status, timestamp, externalId)));
+                        notifications.Add((contact.CurrentAssignedAgentId, conversation.Id, ticket.Id, new MessageDto(message.Id, conversation.Id, message.Direction, message.Type, message.TextBody, message.Status, timestamp, externalId, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes)));
                     }
                 }
 
@@ -113,6 +117,9 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
                 }
             }
         }
+        foreach (var messageId in mediaDownloads)
+            db.OutboxMessages.Add(new OutboxMessage { Type = "WhatsAppMediaDownloadRequested", Payload = JsonSerializer.Serialize(new { MessageId = messageId }) });
+
         webhook.MarkProcessed(); await db.SaveChangesAsync(ct);
         return notifications;
     }
@@ -191,20 +198,46 @@ public sealed class WebhookIngestionService(CentralChatDbContext db, IOptions<Me
         foreach (var c in contacts.EnumerateArray()) { var id = c.TryGetProperty("wa_id", out var wa) ? wa.GetString() : null; var name = c.TryGetProperty("profile", out var p) && p.TryGetProperty("name", out var n) ? n.GetString() : null; if (id is not null) result[id] = name; }
         return result;
     }
-    private static (MessageType, string?) ExtractContent(JsonElement m)
+    private sealed record IncomingContent(MessageType Type, string? Text, string? MediaId, string? MimeType);
+
+    /// <summary>
+    /// Media messages name their payload after their own type — {"image": {"id", "mime_type", "caption"}} —
+    /// and carry only a provider id, never the bytes. The caption becomes the message text so a photo
+    /// with a note reads correctly in the transcript.
+    /// </summary>
+    private static IncomingContent ExtractContent(JsonElement m)
     {
-        var typeName = m.TryGetProperty("type", out var t) ? t.GetString() : "unknown";
-        var type = Enum.TryParse<MessageType>(typeName, true, out var parsed) ? parsed : MessageType.Unknown;
-        string? body = typeName == "text" && m.TryGetProperty("text", out var text) && text.TryGetProperty("body", out var b) ? b.GetString() : null;
-        return (type, body);
+        var typeName = m.TryGetProperty("type", out var t) ? t.GetString() ?? "unknown" : "unknown";
+        var messageType = Enum.TryParse<MessageType>(typeName, true, out var parsedType) ? parsedType : MessageType.Unknown;
+
+        if (typeName == "text")
+            return new(messageType, m.TryGetProperty("text", out var textNode) && textNode.TryGetProperty("body", out var bodyNode) ? bodyNode.GetString() : null, null, null);
+
+        if (m.TryGetProperty(typeName, out var payload) && payload.ValueKind == JsonValueKind.Object)
+            return new(
+                messageType,
+                payload.TryGetProperty("caption", out var caption) ? caption.GetString() : null,
+                payload.TryGetProperty("id", out var mediaId) ? mediaId.GetString() : null,
+                payload.TryGetProperty("mime_type", out var mime) ? mime.GetString() : null);
+
+        return new(messageType, null, null, null);
     }
+
     private static DateTimeOffset ParseTimestamp(JsonElement item) => item.TryGetProperty("timestamp", out var ts) && long.TryParse(ts.GetString(), CultureInfo.InvariantCulture, out var seconds) ? DateTimeOffset.FromUnixTimeSeconds(seconds) : DateTimeOffset.UtcNow;
     private static string NormalizePhone(string value) => "+" + new string(value.Where(char.IsDigit).ToArray());
     private static string? ExtractFirstMessageId(string body) { try { using var doc = JsonDocument.Parse(body); return doc.RootElement.GetProperty("entry")[0].GetProperty("changes")[0].GetProperty("value").GetProperty("messages")[0].GetProperty("id").GetString(); } catch { return null; } }
 }
 
 public record WhatsAppSendResult(bool Success, string? ExternalMessageId, string? Error);
-public interface IWhatsAppClient { Task<WhatsAppSendResult> SendTextAsync(string phoneNumberId, string recipient, string text, CancellationToken cancellationToken); }
+public record WhatsAppMedia(byte[] Content, string? MimeType);
+
+public interface IWhatsAppClient
+{
+    Task<WhatsAppSendResult> SendTextAsync(string phoneNumberId, string recipient, string text, CancellationToken cancellationToken);
+
+    /// <summary>Meta hands out a short-lived URL for a media id; the binary needs the access token too.</summary>
+    Task<WhatsAppMedia?> DownloadMediaAsync(string mediaId, CancellationToken cancellationToken);
+}
 
 public sealed class MetaWhatsAppClient(HttpClient http, IOptions<MetaWhatsAppOptions> options) : IWhatsAppClient
 {
@@ -219,9 +252,36 @@ public sealed class MetaWhatsAppClient(HttpClient http, IOptions<MetaWhatsAppOpt
         using var doc = JsonDocument.Parse(body); var id = doc.RootElement.TryGetProperty("messages", out var messages) && messages.GetArrayLength() > 0 ? messages[0].GetProperty("id").GetString() : null;
         return new(id is not null, id, id is null ? "Meta response did not contain a message id." : null);
     }
+
+    public async Task<WhatsAppMedia?> DownloadMediaAsync(string mediaId, CancellationToken ct)
+    {
+        // Two hops: the id resolves to a signed URL on a Meta CDN host, which still requires the token.
+        using var lookup = new HttpRequestMessage(HttpMethod.Get, $"{_options.ApiVersion}/{mediaId}");
+        lookup.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
+        using var lookupResponse = await http.SendAsync(lookup, ct);
+        if (!lookupResponse.IsSuccessStatusCode) return null;
+
+        using var descriptor = JsonDocument.Parse(await lookupResponse.Content.ReadAsStringAsync(ct));
+        var url = descriptor.RootElement.TryGetProperty("url", out var u) ? u.GetString() : null;
+        var mime = descriptor.RootElement.TryGetProperty("mime_type", out var m) ? m.GetString() : null;
+        if (string.IsNullOrWhiteSpace(url)) return null;
+
+        using var download = new HttpRequestMessage(HttpMethod.Get, url);
+        download.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
+        using var downloadResponse = await http.SendAsync(download, ct);
+        if (!downloadResponse.IsSuccessStatusCode) return null;
+
+        return new WhatsAppMedia(await downloadResponse.Content.ReadAsByteArrayAsync(ct), mime ?? downloadResponse.Content.Headers.ContentType?.MediaType);
+    }
 }
 
 public sealed class DevelopmentWhatsAppClient : IWhatsAppClient
 {
+    // A 1x1 PNG, so the media path can be exercised locally without calling Meta.
+    private static readonly byte[] Placeholder = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
     public Task<WhatsAppSendResult> SendTextAsync(string phoneNumberId, string recipient, string text, CancellationToken ct) => Task.FromResult(new WhatsAppSendResult(true, $"dev-{Guid.NewGuid():N}", null));
+
+    public Task<WhatsAppMedia?> DownloadMediaAsync(string mediaId, CancellationToken ct) => Task.FromResult<WhatsAppMedia?>(new(Placeholder, "image/png"));
 }

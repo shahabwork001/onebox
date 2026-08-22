@@ -74,11 +74,12 @@ export function LoginView({ onSignedIn }: { onSignedIn: (auth: Auth) => void }) 
       </section>
 
       <aside className="login-art">
-        <div className="login-art-mark" aria-hidden="true">
-          ✦
-        </div>
         <blockquote>Every customer conversation, in one inbox your whole team can work.</blockquote>
-        <p>Secure assignment · Real-time delivery · Complete history</p>
+        <ul className="login-points">
+          <li>Conversations routed to whoever claims them first</li>
+          <li>Real-time delivery and read receipts</li>
+          <li>Complete, auditable history for every contact</li>
+        </ul>
       </aside>
     </main>
   );

@@ -312,6 +312,7 @@ export default function Workspace() {
             canAssign={canAssign}
             isOwner={isOwner}
             composer={composer}
+            token={auth.accessToken}
             onComposerChange={setComposer}
             onBack={() => setSelectedId(null)}
             actions={{
@@ -332,7 +333,7 @@ export default function Workspace() {
 
       {error && (
         <button type="button" className="toast" onClick={() => setError("")} role="alert">
-          {error} <span aria-hidden="true">×</span>
+          <span>{error}</span>
         </button>
       )}
     </main>

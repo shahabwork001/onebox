@@ -11,6 +11,7 @@ import { API_BASE } from "@/lib/api";
  */
 const EVENTS = [
   "message.received",
+  "message.updated",
   "message.sent",
   "message.failed",
   "ticket.created",

@@ -1,6 +1,7 @@
 import type { Dashboard } from "@/lib/types";
 import { formatDuration } from "@/lib/format";
 import { Avatar, Spinner } from "./Primitives";
+import { IconRefresh } from "./icons";
 
 function Metric({ label, value, hint, tone }: { label: string; value: string | number; hint?: string; tone?: "warn" | "good" }) {
   return (
@@ -35,7 +36,7 @@ export function DashboardView({
           <p>Welcome back, {displayName}</p>
         </div>
         <button type="button" className="icon-button" onClick={onRefresh} title="Refresh" aria-label="Refresh">
-          ↻
+          <IconRefresh size={17} />
         </button>
       </header>
 
@@ -49,7 +50,7 @@ export function DashboardView({
                 <strong>
                   {data.totals.unassigned} conversation{data.totals.unassigned === 1 ? "" : "s"} waiting to be claimed
                 </strong>
-                <span>Open the queue →</span>
+                <span className="callout-cta">Open the queue</span>
               </button>
             )}
 

@@ -52,3 +52,23 @@ public interface IDashboardService
     Task<DashboardDto> GetAsync(Guid userId, bool privileged, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Callers only ever handle an opaque storage key, so the backing store can move from local disk to
+/// object storage without touching anything above it.
+/// </summary>
+public interface IMediaStore
+{
+    Task<string> SaveAsync(Stream content, string extension, CancellationToken cancellationToken);
+    Task<Stream?> OpenAsync(string key, CancellationToken cancellationToken);
+    Task DeleteAsync(string key, CancellationToken cancellationToken);
+}
+
+public interface IMediaService
+{
+    /// <summary>Fetches the provider's binary for a message and stores it. Safe to retry.</summary>
+    Task DownloadAsync(Guid messageId, CancellationToken cancellationToken);
+
+    /// <summary>Opens stored media once the caller is allowed to read the owning conversation.</summary>
+    Task<MediaContent> OpenAsync(Guid messageId, Guid userId, bool privileged, CancellationToken cancellationToken);
+}
+
