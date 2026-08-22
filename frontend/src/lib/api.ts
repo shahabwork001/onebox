@@ -24,6 +24,9 @@ export class ApiError extends Error {
 
 type PagedResult<T> = { items: T[]; page: number; pageSize: number; total: number };
 
+/** Deliberately modest: the list is a worklist, and more rows are a page away rather than a scroll. */
+export const TICKETS_PER_PAGE = 30;
+
 async function send<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -70,8 +73,12 @@ export async function refreshSession(refreshToken: string): Promise<Auth> {
 }
 
 export const api = {
-  tickets: (token: string, scope: Scope, status: StatusFilter) =>
-    send<PagedResult<Ticket>>(`/api/tickets?scope=${scope}&status=${status}&pageSize=100`, token),
+  tickets: (token: string, scope: Scope, status: StatusFilter, search = "", page = 1) =>
+    send<PagedResult<Ticket>>(
+      `/api/tickets?scope=${scope}&status=${status}&page=${page}&pageSize=${TICKETS_PER_PAGE}` +
+        (search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ""),
+      token,
+    ),
 
   messages: (token: string, conversationId: string) =>
     send<Message[]>(`/api/conversations/${conversationId}/messages?limit=100`, token),

@@ -45,6 +45,11 @@ export function Workspace() {
   const [teamBusyId, setTeamBusyId] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusFilter>("active");
   const [search, setSearch] = useState("");
+  // Typed text is applied on a delay: a request per keystroke would be one per agent per keystroke.
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [ticketTotal, setTicketTotal] = useState(0);
+  const [ticketPage, setTicketPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [unassignedCount, setUnassignedCount] = useState<number | undefined>();
@@ -133,17 +138,43 @@ export function Workspace() {
     setTicketsLoading(true);
     try {
       const [current, unassigned] = await Promise.all([
-        api.tickets(token, scope, status),
+        api.tickets(token, scope, status, appliedSearch),
         api.tickets(token, "unassigned", "active"),
       ]);
       setTickets(current.items);
+      setTicketTotal(current.total);
+      setTicketPage(1);
       setUnassignedCount(unassigned.total);
     } catch (cause) {
       report(cause);
     } finally {
       setTicketsLoading(false);
     }
-  }, [token, scope, status, report]);
+  }, [token, scope, status, appliedSearch, report]);
+
+  /** Appends the next page rather than replacing, so the agent keeps their place in the list. */
+  const loadMoreTickets = useCallback(async () => {
+    if (!token || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await api.tickets(token, scope, status, appliedSearch, ticketPage + 1);
+      setTickets(current => {
+        const seen = new Set(current.map(ticket => ticket.id));
+        return [...current, ...next.items.filter(ticket => !seen.has(ticket.id))];
+      });
+      setTicketTotal(next.total);
+      setTicketPage(page => page + 1);
+    } catch (cause) {
+      report(cause);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [token, scope, status, appliedSearch, ticketPage, loadingMore, report]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAppliedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     loadTickets();
@@ -276,13 +307,14 @@ export function Workspace() {
     (incoming: Ticket) => {
       setTickets(current => {
         const without = current.filter(ticket => ticket.id !== incoming.id);
-        if (!auth || !matchesView(incoming, scope, status, auth.user.id)) return without;
+        // A live update must not jump into a filtered list it may not belong to.
+        if (!auth || appliedSearch.trim() || !matchesView(incoming, scope, status, auth.user.id)) return without;
         return [incoming, ...without].sort(
           (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime(),
         );
       });
     },
-    [auth, scope, status],
+    [auth, scope, status, appliedSearch],
   );
 
   const onRealtime = useCallback(
@@ -438,15 +470,8 @@ export function Workspace() {
     [agents, auth?.user.id],
   );
 
-  const visibleTickets = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return tickets;
-    return tickets.filter(ticket =>
-      [ticket.contactName, ticket.phoneNumber, ticket.number, ticket.lastMessage]
-        .filter(Boolean)
-        .some(field => field!.toLowerCase().includes(needle)),
-    );
-  }, [tickets, search]);
+  // The server applies the filter now, so what arrives is already the answer.
+  const visibleTickets = tickets;
 
   if (!ready) return null;
 
@@ -545,7 +570,10 @@ export function Workspace() {
             status={status}
             tickets={visibleTickets}
             search={search}
+            total={ticketTotal}
             loading={ticketsLoading}
+            loadingMore={loadingMore}
+            onLoadMore={loadMoreTickets}
             selectedId={selectedId}
             agentNameOf={agentNameOf}
             onStatusChange={next => {

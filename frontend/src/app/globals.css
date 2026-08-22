@@ -531,6 +531,24 @@ button:disabled {
   padding: 0 5px;
 }
 
+.load-more {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 12px 16px 20px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.load-more:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
 .list-empty {
   padding: 40px 20px;
   text-align: center;
@@ -707,6 +725,40 @@ button:disabled {
 /* Unacknowledged, not broken: settle it visually rather than announcing it. */
 .bubble.is-pending {
   opacity: 0.72;
+}
+
+/* A run of replies from one person reads as one turn, so the gap tightens and the tail is dropped. */
+.bubble.continues {
+  margin-top: -4px;
+}
+
+.bubble-outbound.continues {
+  border-top-right-radius: var(--radius-lg);
+}
+
+.bubble-inbound.continues {
+  border-top-left-radius: var(--radius-lg);
+}
+
+/* Which colleague replied — the thing a shared inbox has to answer and a personal one never does. */
+.bubble-sender {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-strong);
+  margin-bottom: 3px;
+}
+
+.bubble-link {
+  color: var(--brand-strong);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.bubble-emoji {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.2;
 }
 
 .message-empty {

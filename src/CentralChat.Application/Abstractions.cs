@@ -9,7 +9,7 @@ public interface IAuthService
 
 public interface ITicketService
 {
-    Task<PagedResult<TicketListItem>> ListAsync(string scope, string? status, Guid userId, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResult<TicketListItem>> ListAsync(string scope, string? status, string? search, Guid userId, int page, int pageSize, CancellationToken cancellationToken);
     Task ClaimAsync(Guid ticketId, Guid userId, CancellationToken cancellationToken);
     Task AssignAsync(Guid ticketId, Guid agentId, Guid changedBy, string? reason, CancellationToken cancellationToken);
     Task UnassignAsync(Guid ticketId, Guid changedBy, bool privileged, string? reason, CancellationToken cancellationToken);

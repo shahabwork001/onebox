@@ -20,7 +20,11 @@ public sealed class ConversationService(CentralChatDbContext db, ITicketBroadcas
         await GetAsync(id, userId, privileged, ct); limit = Math.Clamp(limit, 1, 100);
         var query = db.ChatMessages.AsNoTracking().Where(x => x.ConversationId == id);
         if (beforeId.HasValue) { var cursor = await db.ChatMessages.AsNoTracking().SingleOrDefaultAsync(x => x.Id == beforeId, ct) ?? throw new NotFoundException("Message cursor not found."); query = query.Where(x => x.ProviderTimestamp < cursor.ProviderTimestamp); }
-        return await query.OrderByDescending(x => x.ProviderTimestamp).ThenByDescending(x => x.Id).Take(limit).Select(x => new MessageDto(x.Id, x.ConversationId, x.Direction, x.Type, x.TextBody, x.Status, x.ProviderTimestamp, x.ExternalMessageId, x.MimeType, x.MediaUrl != null, x.MediaSizeBytes)).ToListAsync(ct);
+        return await query.OrderByDescending(x => x.ProviderTimestamp).ThenByDescending(x => x.Id).Take(limit).Select(x => new MessageDto(
+                x.Id, x.ConversationId, x.Direction, x.Type, x.TextBody, x.Status, x.ProviderTimestamp,
+                x.ExternalMessageId, x.MimeType, x.MediaUrl != null, x.MediaSizeBytes,
+                // A shared inbox needs to show which colleague replied, not just that someone did.
+                x.SenderUserId == null ? null : db.Users.Where(u => u.Id == x.SenderUserId).Select(u => u.DisplayName).FirstOrDefault())).ToListAsync(ct);
     }
 
     public async Task<MessageDto> SendAsync(Guid id, string text, Guid userId, bool privileged, CancellationToken ct)
@@ -43,6 +47,7 @@ public sealed class ConversationService(CentralChatDbContext db, ITicketBroadcas
 
         await db.SaveChangesAsync(ct);
         if (ticket is not null) await broadcast.UpsertedAsync(ticket.Id, ct);
+        var senderName = await db.Users.Where(x => x.Id == userId).Select(x => x.DisplayName).SingleOrDefaultAsync(ct);
 
         return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes);
     }
@@ -77,8 +82,9 @@ public sealed class ConversationService(CentralChatDbContext db, ITicketBroadcas
 
         await db.SaveChangesAsync(ct);
         if (ticket is not null) await broadcast.UpsertedAsync(ticket.Id, ct);
+        var senderName = await db.Users.Where(x => x.Id == userId).Select(x => x.DisplayName).SingleOrDefaultAsync(ct);
 
-        return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes);
+        return new(message.Id, id, message.Direction, message.Type, message.TextBody, message.Status, message.ProviderTimestamp, null, message.MimeType, message.HasStoredMedia, message.MediaSizeBytes, senderName);
     }
 
     /// <summary>WhatsApp routes by media kind, and anything it does not recognise travels as a document.</summary>

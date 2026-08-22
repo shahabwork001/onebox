@@ -44,6 +44,8 @@ export type Message = {
   /** False while the provider binary is still being fetched by the queued download job. */
   mediaReady: boolean;
   mediaSizeBytes: number | null;
+  /** Which colleague sent it. Null for anything the customer sent. */
+  senderName: string | null;
 };
 
 /**
@@ -65,6 +67,7 @@ export function draftMessage(conversationId: string, text: string): Message {
     status: "Queued",
     timestamp: new Date().toISOString(),
     externalMessageId: null,
+    senderName: null,
     mimeType: null,
     mediaReady: false,
     mediaSizeBytes: null,

@@ -23,7 +23,10 @@ export function InboxPanel({
   status,
   tickets,
   search,
+  total,
   loading,
+  loadingMore,
+  onLoadMore,
   selectedId,
   agentNameOf,
   onStatusChange,
@@ -35,7 +38,10 @@ export function InboxPanel({
   status: StatusFilter;
   tickets: Ticket[];
   search: string;
+  total: number;
   loading: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
   selectedId: string | null;
   agentNameOf: (agentId: string | null) => string | null;
   onStatusChange: (status: StatusFilter) => void;
@@ -49,7 +55,9 @@ export function InboxPanel({
         <div>
           <h1>{TITLES[scope]}</h1>
           <p>
-            {tickets.length} {tickets.length === 1 ? "conversation" : "conversations"}
+            {total > tickets.length
+              ? `${tickets.length} of ${total} conversations`
+              : `${total} ${total === 1 ? "conversation" : "conversations"}`}
           </p>
         </div>
         <button type="button" className="icon-button" onClick={onRefresh} title="Refresh" aria-label="Refresh">
@@ -91,7 +99,7 @@ export function InboxPanel({
 
         {!loading && tickets.length === 0 && (
           <p className="list-empty">
-            {search ? "No conversations match your search." : "This queue is empty."}
+            {search ? `Nothing matches “${search}”.` : "This queue is empty."}
           </p>
         )}
 
@@ -117,6 +125,12 @@ export function InboxPanel({
             </button>
           );
         })}
+
+        {tickets.length < total && (
+          <button type="button" className="load-more" disabled={loadingMore} onClick={onLoadMore}>
+            {loadingMore ? "Loading…" : `Load ${Math.min(30, total - tickets.length)} more`}
+          </button>
+        )}
       </div>
     </section>
   );

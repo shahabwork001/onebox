@@ -7,7 +7,7 @@ namespace CentralChat.Infrastructure;
 
 public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier realtime, ITicketBroadcaster broadcast) : ITicketService
 {
-    public async Task<PagedResult<TicketListItem>> ListAsync(string scope, string? status, Guid userId, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResult<TicketListItem>> ListAsync(string scope, string? status, string? search, Guid userId, int page, int pageSize, CancellationToken ct)
     {
         page = Math.Max(page, 1); pageSize = Math.Clamp(pageSize, 1, 100);
         var query = from t in db.Tickets.AsNoTracking()
@@ -26,6 +26,20 @@ public sealed class TicketService(CentralChatDbContext db, IRealtimeNotifier rea
             "all" => query,
             _ => throw new ValidationException($"Unknown ticket status filter '{status}'.")
         };
+
+        // Filtering in the browser only ever saw the page already loaded, so searching for a customer
+        // from last week silently found nothing. Message bodies are included because that is usually
+        // what an agent remembers about a conversation.
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = $"%{search.Trim()}%";
+            query = query.Where(x =>
+                EF.Functions.ILike(x.c.DisplayName, term) ||
+                EF.Functions.ILike(x.c.PhoneNumber, term) ||
+                EF.Functions.ILike(x.t.TicketNumber, term) ||
+                db.ChatMessages.Any(m => m.ConversationId == x.t.ConversationId && m.TextBody != null && EF.Functions.ILike(m.TextBody, term)));
+        }
+
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(x => x.t.LastActivityAt).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new TicketListItem(x.t.Id, x.t.TicketNumber, x.t.Status, x.t.Priority, x.c.Id, x.c.DisplayName, x.c.PhoneNumber, x.t.ConversationId, x.t.AssignedAgentId, x.t.LastActivityAt, x.last)).ToListAsync(ct);

@@ -7,6 +7,7 @@ import { dayKeyOf, formatDayHeading, formatDuration, formatTime } from "@/lib/fo
 import { ActionMenu, type MenuAction } from "./ActionMenu";
 import { AssignMenu } from "./AssignMenu";
 import { MediaAttachment } from "./MediaAttachment";
+import { MessageText } from "./MessageText";
 import { Avatar, DeliveryTick, EmptyState, Spinner, StatusBadge } from "./Primitives";
 import { IconAttach, IconBack, IconClock, IconLock, IconMessage, IconSelect, IconSend } from "./icons";
 
@@ -255,20 +256,34 @@ function MessageStream({ messages, token }: { messages: Message[]; token: string
 
   return (
     <>
-      {messages.map(message => {
+      {messages.map((message, index) => {
         const day = dayKeyOf(message.timestamp);
         const heading = day === lastDay ? null : formatDayHeading(message.timestamp);
         lastDay = day;
         const outbound = message.direction === "Outbound";
 
+        // Consecutive messages from the same side sit closer together and name their sender once, the
+        // way every chat client groups a run of replies rather than repeating the header on each.
+        const previous = index > 0 ? messages[index - 1] : null;
+        const continues =
+          !heading &&
+          previous?.direction === message.direction &&
+          previous?.senderName === message.senderName;
+
         return (
           <div key={message.id} className="message-group">
             {heading && <div className="day-divider">{heading}</div>}
             <div
-              className={`bubble ${outbound ? "bubble-outbound" : "bubble-inbound"}${isPending(message) ? " is-pending" : ""}`}
+              className={
+                `bubble ${outbound ? "bubble-outbound" : "bubble-inbound"}` +
+                `${isPending(message) ? " is-pending" : ""}${continues ? " continues" : ""}`
+              }
             >
+              {outbound && message.senderName && !continues && (
+                <span className="bubble-sender">{message.senderName}</span>
+              )}
               {hasAttachment(message) && <MediaAttachment message={message} token={token} />}
-              {message.text && <p>{message.text}</p>}
+              {message.text && <MessageText text={message.text} />}
               {!message.text && !hasAttachment(message) && <p className="message-empty">No content</p>}
               <small>
                 <time dateTime={message.timestamp}>{formatTime(message.timestamp)}</time>
