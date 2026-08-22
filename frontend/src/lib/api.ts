@@ -82,7 +82,23 @@ export const api = {
       body: JSON.stringify({ text }),
     }),
 
-  agents: (token: string) => send<Agent[]>("/api/users", token),
+  agents: (token: string, includeInactive = false) =>
+    send<Agent[]>(`/api/users?includeInactive=${includeInactive}`, token),
+
+  createUser: (token: string, body: { email: string; displayName: string; password: string; role: string }) =>
+    send<Agent>("/api/users", token, { method: "POST", body: JSON.stringify(body) }),
+
+  updateUser: (token: string, id: string, body: { displayName?: string; role?: string; isActive?: boolean }) =>
+    send<Agent>(`/api/users/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
+
+  setUserPassword: (token: string, id: string, password: string) =>
+    send<void>(`/api/users/${id}/password`, token, { method: "POST", body: JSON.stringify({ password }) }),
+
+  changeOwnPassword: (token: string, currentPassword: string, newPassword: string) =>
+    send<void>("/api/auth/password", token, {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 
   dashboard: (token: string) => send<Dashboard>("/api/dashboard", token),
 

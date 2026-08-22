@@ -136,3 +136,13 @@ export const IconChevronDown = (p: IconProps) => (
     <path d="M6 9l6 6 6-6" />
   </Glyph>
 );
+
+export const IconTeam = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="3.4" />
+    <path d="M22 20v-2a4 4 0 0 0-3-3.9" />
+    <path d="M16 3.6a4 4 0 0 1 0 7" />
+  </Glyph>
+);
+

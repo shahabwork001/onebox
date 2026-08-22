@@ -10,6 +10,7 @@ const VIEW_TO_SEGMENT: Record<View, string> = {
   unassigned: "queue",
   mine: "inbox",
   all: "all",
+  team: "team",
 };
 
 const SEGMENT_TO_VIEW: Record<string, View> = {
@@ -17,6 +18,7 @@ const SEGMENT_TO_VIEW: Record<string, View> = {
   queue: "unassigned",
   inbox: "mine",
   all: "all",
+  team: "team",
 };
 
 export type Route = { view: View; ticketId: string | null };

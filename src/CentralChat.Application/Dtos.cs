@@ -34,3 +34,8 @@ public record DashboardDto(DashboardTotals Totals, IReadOnlyCollection<AgentWork
 
 public record MediaContent(Stream Content, string MimeType, string FileName);
 
+public record CreateUserRequest(string Email, string DisplayName, string Password, string Role);
+public record UpdateUserRequest(string? DisplayName, string? Role, bool? IsActive);
+public record SetPasswordRequest(string Password);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+

@@ -74,6 +74,8 @@ export function draftMessage(conversationId: string, text: string): Message {
 export const hasAttachment = (message: Pick<Message, "type">) =>
   message.type !== "Text" && message.type !== "Unknown";
 
+export const ROLES = ["SuperAdmin", "Admin", "TeamLead", "Agent"] as const;
+
 export type Agent = {
   id: string;
   email: string;
@@ -96,10 +98,10 @@ export type Contact = {
 export type Scope = "mine" | "unassigned" | "all";
 
 /** What the rail is showing. Dashboard and the unassigned queue are full-width screens of their own. */
-export type View = "dashboard" | Scope;
+export type View = "dashboard" | "team" | Scope;
 
 /** Screens that own the full content area rather than splitting into list plus thread. */
-export const isFullWidthView = (view: View) => view === "dashboard" || view === "unassigned";
+export const isFullWidthView = (view: View) => view === "dashboard" || view === "unassigned" || view === "team";
 
 export type DashboardTotals = {
   contacts: number;
@@ -140,6 +142,7 @@ export const PERMISSIONS = {
   ticketsAssign: "tickets.assign",
   ticketsClaim: "tickets.claim",
   ticketsResolve: "tickets.resolve",
+  usersManage: "users.manage",
   messagesSend: "messages.send",
 } as const;
 

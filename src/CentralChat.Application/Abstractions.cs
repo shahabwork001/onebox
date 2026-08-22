@@ -36,7 +36,7 @@ public interface IDirectoryService
 {
     Task<PagedResult<ContactDto>> ContactsAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
     Task<ContactDto> ContactAsync(Guid id, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<AgentDto>> UsersAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<AgentDto>> UsersAsync(bool includeInactive, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<TeamDto>> TeamsAsync(CancellationToken cancellationToken);
 }
 
@@ -70,5 +70,17 @@ public interface IMediaService
 
     /// <summary>Opens stored media once the caller is allowed to read the owning conversation.</summary>
     Task<MediaContent> OpenAsync(Guid messageId, Guid userId, bool privileged, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Writes to the user directory. Kept apart from <see cref="IDirectoryService"/> because reading the
+/// roster is something any assigner does, while changing it is an administrative act.
+/// </summary>
+public interface IUserAdminService
+{
+    Task<AgentDto> CreateAsync(CreateUserRequest request, Guid actingUserId, CancellationToken cancellationToken);
+    Task<AgentDto> UpdateAsync(Guid userId, UpdateUserRequest request, Guid actingUserId, CancellationToken cancellationToken);
+    Task SetPasswordAsync(Guid userId, string password, Guid actingUserId, CancellationToken cancellationToken);
+    Task ChangeOwnPasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken);
 }
 

@@ -12,9 +12,24 @@ public sealed class ContactsController(IDirectoryService directory) : Controller
 }
 
 [ApiController, Route("api/users"), Authorize(Policy = Permissions.TicketsAssign)]
-public sealed class UsersController(IDirectoryService directory) : ControllerBase
+public sealed class UsersController(IDirectoryService directory, IUserAdminService admin, ICurrentUser current) : ControllerBase
 {
-    [HttpGet] public Task<IReadOnlyCollection<AgentDto>> List(CancellationToken ct) => directory.UsersAsync(ct);
+    /// <summary>Assignment menus want only people who can still take work; management wants everyone.</summary>
+    [HttpGet] public Task<IReadOnlyCollection<AgentDto>> List([FromQuery] bool includeInactive = false, CancellationToken ct = default)
+        => directory.UsersAsync(includeInactive && current.HasPermission(Permissions.UsersManage), ct);
+
+    [HttpPost, Authorize(Policy = Permissions.UsersManage)]
+    public Task<AgentDto> Create(CreateUserRequest request, CancellationToken ct) => admin.CreateAsync(request, current.Id, ct);
+
+    [HttpPatch("{id:guid}"), Authorize(Policy = Permissions.UsersManage)]
+    public Task<AgentDto> Update(Guid id, UpdateUserRequest request, CancellationToken ct) => admin.UpdateAsync(id, request, current.Id, ct);
+
+    [HttpPost("{id:guid}/password"), Authorize(Policy = Permissions.UsersManage)]
+    public async Task<IActionResult> SetPassword(Guid id, SetPasswordRequest request, CancellationToken ct)
+    {
+        await admin.SetPasswordAsync(id, request.Password, current.Id, ct);
+        return NoContent();
+    }
 }
 
 [ApiController, Route("api/teams"), Authorize(Policy = Permissions.TicketsView)]

@@ -25,6 +25,7 @@ import { InboxPanel } from "./InboxPanel";
 import { ConversationPanel } from "./ConversationPanel";
 import { DashboardView } from "./DashboardView";
 import { QueueTable } from "./QueueTable";
+import { TeamView } from "./TeamView";
 
 export function Workspace() {
   const [auth, setAuth] = useState<Auth | null>(null);
@@ -34,6 +35,9 @@ export function Workspace() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [team, setTeam] = useState<Agent[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamBusyId, setTeamBusyId] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusFilter>("active");
   const [search, setSearch] = useState("");
 
@@ -53,9 +57,10 @@ export function Workspace() {
   const [error, setError] = useState("");
 
   // The dashboard has no ticket list of its own; it borrows "mine" so the rail counts stay warm.
-  const scope: Scope = view === "dashboard" ? "mine" : view;
+  const scope: Scope = view === "dashboard" || view === "team" ? "mine" : view;
   const token = auth?.accessToken;
   const canAssign = !!auth?.user.permissions.includes(PERMISSIONS.ticketsAssign);
+  const canManageUsers = !!auth?.user.permissions.includes(PERMISSIONS.usersManage);
 
   useEffect(() => {
     const applyUrl = () => {
@@ -143,6 +148,39 @@ export function Workspace() {
     if (!token || !canAssign) return;
     api.agents(token).then(setAgents).catch(() => setAgents([]));
   }, [token, canAssign]);
+
+  // The team screen is the only place deactivated accounts should appear; assignment must not offer them.
+  const loadTeam = useCallback(async () => {
+    if (!token || !canManageUsers) return;
+    setTeamLoading(true);
+    try {
+      setTeam(await api.agents(token, true));
+    } catch (cause) {
+      report(cause);
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [token, canManageUsers, report]);
+
+  useEffect(() => {
+    if (view === "team") loadTeam();
+  }, [view, loadTeam]);
+
+  const runTeamAction = useCallback(
+    async (id: string | null, action: () => Promise<void>) => {
+      setTeamBusyId(id);
+      try {
+        await action();
+        await loadTeam();
+        if (token && canAssign) api.agents(token).then(setAgents).catch(() => undefined);
+      } catch (cause) {
+        report(cause);
+      } finally {
+        setTeamBusyId(null);
+      }
+    },
+    [loadTeam, report, token, canAssign],
+  );
 
   const loadDashboard = useCallback(async () => {
     if (!token) return;
@@ -310,6 +348,7 @@ export function Workspace() {
       <Sidebar
         user={auth.user}
         view={view}
+        canManageUsers={canManageUsers}
         counts={{ unassigned: unassignedCount }}
         realtime={realtime}
         onViewChange={next => {
@@ -327,6 +366,25 @@ export function Workspace() {
           canSeeAgents={canAssign}
           onOpenQueue={() => setView("unassigned")}
           onRefresh={loadDashboard}
+        />
+      ) : view === "team" ? (
+        <TeamView
+          agents={team}
+          loading={teamLoading}
+          busyId={teamBusyId}
+          currentUserId={auth.user.id}
+          onRefresh={loadTeam}
+          actions={{
+            onCreate: input => runTeamAction(null, () => api.createUser(auth.accessToken, input).then(() => undefined)),
+            onChangeRole: (agent, role) =>
+              runTeamAction(agent.id, () => api.updateUser(auth.accessToken, agent.id, { role }).then(() => undefined)),
+            onSetActive: (agent, isActive) =>
+              runTeamAction(agent.id, () => api.updateUser(auth.accessToken, agent.id, { isActive }).then(() => undefined)),
+            onResetPassword: (agent, password) =>
+              runTeamAction(agent.id, () => api.setUserPassword(auth.accessToken, agent.id, password)),
+            onChangeOwnPassword: (currentPassword, newPassword) =>
+              runTeamAction(null, () => api.changeOwnPassword(auth.accessToken, currentPassword, newPassword)),
+          }}
         />
       ) : view === "unassigned" ? (
         <QueueTable
