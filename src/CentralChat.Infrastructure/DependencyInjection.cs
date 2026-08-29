@@ -16,7 +16,11 @@ public static class DependencyInjection
         services.Configure<BootstrapOptions>(configuration.GetSection(BootstrapOptions.Section));
         services.Configure<RetentionOptions>(configuration.GetSection(RetentionOptions.Section));
         services.Configure<MediaOptions>(configuration.GetSection(MediaOptions.Section));
-        services.AddDbContext<CentralChatDbContext>(o => o.UseNpgsql(configuration.GetConnectionString("PostgreSql")));
+        services.AddSingleton<OutboxSignal>();
+        services.AddSingleton<OutboxSignalInterceptor>();
+        services.AddDbContext<CentralChatDbContext>((provider, o) => o
+            .UseNpgsql(configuration.GetConnectionString("PostgreSql"))
+            .AddInterceptors(provider.GetRequiredService<OutboxSignalInterceptor>()));
         services.AddIdentityCore<ApplicationUser>(o => { o.Password.RequiredLength = 10; o.Password.RequireDigit = true; o.Password.RequireUppercase = true; o.User.RequireUniqueEmail = true; })
             .AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<CentralChatDbContext>().AddDefaultTokenProviders();
         services.AddScoped<IAuthService, AuthService>(); services.AddScoped<ITicketService, TicketService>(); services.AddScoped<IConversationService, ConversationService>(); services.AddScoped<IWebhookIngestionService, WebhookIngestionService>();

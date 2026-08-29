@@ -36,7 +36,7 @@ public sealed class RabbitConnection : IDisposable
     public void Dispose() => _connection?.Dispose();
 }
 
-public sealed class OutboxPublisher(IServiceScopeFactory scopes, RabbitConnection rabbit, ILogger<OutboxPublisher> logger) : BackgroundService
+public sealed class OutboxPublisher(IServiceScopeFactory scopes, RabbitConnection rabbit, OutboxSignal signal, ILogger<OutboxPublisher> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -46,7 +46,9 @@ public sealed class OutboxPublisher(IServiceScopeFactory scopes, RabbitConnectio
             {
                 using var scope = scopes.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<CentralChatDbContext>();
                 var items = await db.OutboxMessages.Where(x => x.ProcessedAt == null && x.RetryCount < 20).OrderBy(x => x.OccurredAt).Take(50).ToListAsync(stoppingToken);
-                if (items.Count == 0) { await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken); continue; }
+                // Wait to be told there is work rather than asking again in two seconds. The interval
+                // survives only as a fallback for work another instance committed.
+                if (items.Count == 0) { await signal.WaitAsync(TimeSpan.FromSeconds(2), stoppingToken); continue; }
                 using var channel = rabbit.CreateChannel(); channel.ConfirmSelect();
                 foreach (var item in items)
                 {

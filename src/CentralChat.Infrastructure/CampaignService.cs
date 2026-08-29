@@ -123,10 +123,22 @@ public sealed class CampaignService(
 
     public async Task<IReadOnlyCollection<CampaignDto>> ListAsync(CancellationToken ct)
     {
-        var campaigns = await db.Campaigns.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(50).Select(x => x.Id).ToListAsync(ct);
-        var result = new List<CampaignDto>(campaigns.Count);
-        foreach (var id in campaigns) result.Add(await DescribeAsync(id, ct));
-        return result;
+        // Counts for every listed campaign in one grouped query rather than two per row.
+        var campaigns = await db.Campaigns.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(50).ToListAsync(ct);
+        if (campaigns.Count == 0) return [];
+
+        var ids = campaigns.Select(x => x.Id).ToList();
+        var counts = await db.CampaignRecipients.AsNoTracking()
+            .Where(x => ids.Contains(x.CampaignId))
+            .GroupBy(x => new { x.CampaignId, x.Status })
+            .Select(g => new { g.Key.CampaignId, g.Key.Status, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return campaigns
+            .Select(campaign => Describe(campaign, counts
+                .Where(c => c.CampaignId == campaign.Id)
+                .ToDictionary(c => c.Status, c => c.Count)))
+            .ToList();
     }
 
     public Task<CampaignDto> GetAsync(Guid campaignId, CancellationToken ct) => DescribeAsync(campaignId, ct);
@@ -142,8 +154,15 @@ public sealed class CampaignService(
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(ct);
 
-        int countOf(CampaignRecipientStatus status) => counts.FirstOrDefault(x => x.Status == status)?.Count ?? 0;
+        return Describe(campaign, counts.ToDictionary(x => x.Status, x => x.Count));
+    }
 
+    private static CampaignDto Describe(Campaign campaign, Dictionary<CampaignRecipientStatus, int> counts)
+    {
+        int countOf(CampaignRecipientStatus status) => counts.GetValueOrDefault(status);
+
+        // Delivered and read are also sent; read is also delivered. Reporting them cumulatively keeps
+        // the funnel honest as later receipts move recipients along.
         return new CampaignDto(
             campaign.Id, campaign.Name, campaign.TemplateName, campaign.TemplateLanguage,
             campaign.Status, campaign.TotalRecipients,

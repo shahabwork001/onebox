@@ -265,6 +265,14 @@ npm start
 
 It writes real conversations, so point it at a local or staging instance, never at production.
 
+`latency.js` in the same folder measures the other thing that matters: how long a customer's message
+takes to reach a connected agent's screen, across the whole path — HTTP, outbox, queue, consumer, hub.
+
+```powershell
+cd tools/loadtest
+$env:BASE_URL = "http://127.0.0.1:8080"; node latency.js
+```
+
 Measured on a four-core development machine at 100 agents and 15 inbound messages per second: 66,000
 hub events delivered over 45 seconds with no failures or disconnects, webhook p95 56&nbsp;ms and list
 p95 40&nbsp;ms. Failures are attributed to their cause, so a limit of the generator is never reported
