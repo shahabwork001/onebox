@@ -14,12 +14,20 @@ public sealed class Campaign : Entity
 {
     private Campaign() { }
 
-    public Campaign(string name, string templateName, string templateLanguage, Guid createdBy)
-        => (Name, TemplateName, TemplateLanguage, CreatedBy) = (name, templateName, templateLanguage, createdBy);
+    public Campaign(string name, string templateName, string templateLanguage, string templateVariables, Guid createdBy)
+        => (Name, TemplateName, TemplateLanguage, TemplateVariables, CreatedBy) =
+           (name, templateName, templateLanguage, templateVariables, createdBy);
 
     public string Name { get; private set; } = null!;
     public string TemplateName { get; private set; } = null!;
     public string TemplateLanguage { get; private set; } = null!;
+
+    /// <summary>
+    /// The values filling the template's placeholders, as JSON. They belong to the campaign rather than
+    /// to the act of starting it: a template sent with its placeholders unfilled is rejected outright,
+    /// so what was reviewed at creation has to be exactly what is sent.
+    /// </summary>
+    public string TemplateVariables { get; private set; } = "[]";
     public CampaignStatus Status { get; private set; } = CampaignStatus.Draft;
     public Guid CreatedBy { get; private set; }
     public DateTimeOffset? StartedAt { get; private set; }

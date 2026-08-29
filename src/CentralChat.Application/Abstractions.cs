@@ -111,6 +111,6 @@ public interface ICampaignService
     Task<IReadOnlyCollection<CampaignDto>> ListAsync(CancellationToken cancellationToken);
     Task<CampaignDto> GetAsync(Guid campaignId, CancellationToken cancellationToken);
     Task<CampaignDto> CreateAsync(CreateCampaignRequest request, Guid createdBy, CancellationToken cancellationToken);
-    Task<CampaignDto> StartAsync(Guid campaignId, IReadOnlyList<string> variables, Guid startedBy, CancellationToken cancellationToken);
+    Task<CampaignDto> StartAsync(Guid campaignId, Guid startedBy, CancellationToken cancellationToken);
     Task<CampaignDto> SetPausedAsync(Guid campaignId, bool paused, Guid actingUserId, CancellationToken cancellationToken);
 }

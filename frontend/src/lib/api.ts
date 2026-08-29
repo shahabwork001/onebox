@@ -1,4 +1,16 @@
-import type { Agent, Auth, Contact, Dashboard, Message, Scope, StatusFilter, Ticket } from "./types";
+import type {
+  Agent,
+  Auth,
+  Campaign,
+  CampaignAudience,
+  Contact,
+  Dashboard,
+  Message,
+  MessageTemplate,
+  Scope,
+  StatusFilter,
+  Ticket,
+} from "./types";
 
 /**
  * Empty in production: the reverse proxy serves the app and the API from one origin and forwards
@@ -127,6 +139,19 @@ export const api = {
     }),
 
   dashboard: (token: string) => send<Dashboard>("/api/dashboard", token),
+
+  templates: (token: string) => send<MessageTemplate[]>("/api/campaigns/templates", token),
+  campaignAudience: (token: string) => send<CampaignAudience>("/api/campaigns/audience", token),
+  campaigns: (token: string) => send<Campaign[]>("/api/campaigns", token),
+
+  createCampaign: (token: string, body: { name: string; templateName: string; templateLanguage: string; variables: string[] }) =>
+    send<Campaign>("/api/campaigns", token, { method: "POST", body: JSON.stringify(body) }),
+
+  startCampaign: (token: string, id: string) =>
+    send<Campaign>(`/api/campaigns/${id}/start`, token, { method: "POST" }),
+
+  setCampaignPaused: (token: string, id: string, paused: boolean) =>
+    send<Campaign>(`/api/campaigns/${id}/${paused ? "pause" : "resume"}`, token, { method: "POST" }),
 
   contacts: (token: string) => send<PagedResult<Contact>>("/api/contacts?pageSize=100", token),
 

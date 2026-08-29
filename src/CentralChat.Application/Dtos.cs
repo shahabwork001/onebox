@@ -51,5 +51,4 @@ public record CampaignDto(
     DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt, string? FailureReason);
 
 public record CreateCampaignRequest(string Name, string TemplateName, string TemplateLanguage, IReadOnlyList<string>? Variables);
-public record StartCampaignRequest(IReadOnlyList<string>? Variables);
 public record SetOptOutRequest(bool OptedOut);

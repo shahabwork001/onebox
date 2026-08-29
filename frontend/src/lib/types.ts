@@ -120,10 +120,11 @@ export type Contact = {
 export type Scope = "mine" | "unassigned" | "all";
 
 /** What the rail is showing. Dashboard and the unassigned queue are full-width screens of their own. */
-export type View = "dashboard" | "team" | Scope;
+export type View = "dashboard" | "team" | "campaigns" | Scope;
 
 /** Screens that own the full content area rather than splitting into list plus thread. */
-export const isFullWidthView = (view: View) => view === "dashboard" || view === "unassigned" || view === "team";
+export const isFullWidthView = (view: View) =>
+  view === "dashboard" || view === "unassigned" || view === "team" || view === "campaigns";
 
 export type DashboardTotals = {
   contacts: number;
@@ -183,6 +184,7 @@ export const PERMISSIONS = {
   ticketsClaim: "tickets.claim",
   ticketsResolve: "tickets.resolve",
   usersManage: "users.manage",
+  settingsManage: "settings.manage",
   messagesSend: "messages.send",
 } as const;
 
@@ -193,3 +195,42 @@ export const initialsOf = (value: string) => {
   if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
   return Array.from(cleaned).slice(0, 2).join("").toUpperCase();
 };
+
+export type CampaignStatus = "Draft" | "Sending" | "Paused" | "Completed" | "Failed";
+
+export type MessageTemplate = {
+  name: string;
+  language: string;
+  category: string;
+  status: string;
+  body: string | null;
+  variableCount: number;
+  /** False for anything Meta has not approved; the reason is shown rather than the template hidden. */
+  usable: boolean;
+};
+
+export type CampaignAudience = { contacts: number; optedOut: number; inactive: number; eligible: number };
+
+export type Campaign = {
+  id: string;
+  name: string;
+  templateName: string;
+  templateLanguage: string;
+  status: CampaignStatus;
+  totalRecipients: number;
+  pending: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  skipped: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  failureReason: string | null;
+};
+
+/** Substitutes {{1}}, {{2}} … so an admin sees the message a customer will get, not the template. */
+export function renderTemplate(body: string | null, variables: string[]) {
+  if (!body) return "";
+  return body.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, index) => variables[Number(index) - 1] || match);
+}

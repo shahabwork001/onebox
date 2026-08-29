@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { IconBell, IconBellOff, IconChat, IconClock, IconDashboard, IconInbox, IconSignOut, IconTeam } from "./icons";
+import { IconBell, IconBellOff, IconBroadcast, IconChat, IconClock, IconDashboard, IconInbox, IconSignOut, IconTeam } from "./icons";
 import type { RealtimeState } from "@/hooks/useRealtime";
 import type { User, View } from "@/lib/types";
 import { Avatar } from "./Primitives";
@@ -32,6 +32,13 @@ const QUEUES: { key: View; label: string; hint: string; icon: ReactNode }[] = [
   },
 ];
 
+const CAMPAIGNS_QUEUE = {
+  key: "campaigns" as View,
+  label: "Campaigns",
+  hint: "Broadcast an approved template to your contacts",
+  icon: <IconBroadcast className="nav-icon" />,
+};
+
 const TEAM_QUEUE = {
   key: "team" as View,
   label: "Team",
@@ -50,6 +57,7 @@ export function Sidebar({
   view,
   counts,
   canManageUsers,
+  canBroadcast,
   realtime,
   onViewChange,
   onSignOut,
@@ -59,6 +67,7 @@ export function Sidebar({
   view: View;
   counts: Partial<Record<View, number>>;
   canManageUsers: boolean;
+  canBroadcast: boolean;
   realtime: RealtimeState;
   onViewChange: (view: View) => void;
   onSignOut: () => void;
@@ -82,7 +91,7 @@ export function Sidebar({
       </div>
 
       <nav aria-label="Conversation queues">
-        {[...QUEUES, ...(canManageUsers ? [TEAM_QUEUE] : [])].map(queue => (
+        {[...QUEUES, ...(canBroadcast ? [CAMPAIGNS_QUEUE] : []), ...(canManageUsers ? [TEAM_QUEUE] : [])].map(queue => (
           <button
             key={queue.key}
             type="button"

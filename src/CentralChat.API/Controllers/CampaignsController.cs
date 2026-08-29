@@ -20,9 +20,9 @@ public sealed class CampaignsController(ICampaignService campaigns, ICurrentUser
 
     [HttpPost] public Task<CampaignDto> Create(CreateCampaignRequest request, CancellationToken ct) => campaigns.CreateAsync(request, current.Id, ct);
 
+    /// <summary>Variables were fixed when the campaign was created, so starting takes no arguments.</summary>
     [HttpPost("{id:guid}/start")]
-    public Task<CampaignDto> Start(Guid id, StartCampaignRequest? request, CancellationToken ct) =>
-        campaigns.StartAsync(id, request?.Variables ?? [], current.Id, ct);
+    public Task<CampaignDto> Start(Guid id, CancellationToken ct) => campaigns.StartAsync(id, current.Id, ct);
 
     [HttpPost("{id:guid}/pause")] public Task<CampaignDto> Pause(Guid id, CancellationToken ct) => campaigns.SetPausedAsync(id, true, current.Id, ct);
     [HttpPost("{id:guid}/resume")] public Task<CampaignDto> Resume(Guid id, CancellationToken ct) => campaigns.SetPausedAsync(id, false, current.Id, ct);

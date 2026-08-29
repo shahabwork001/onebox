@@ -50,7 +50,7 @@ public sealed class CampaignService(
         if (variables.Count != template.VariableCount)
             throw new ValidationException($"Template '{template.Name}' needs {template.VariableCount} value(s); {variables.Count} were supplied.");
 
-        var campaign = new Campaign(request.Name.Trim(), template.Name, template.Language, createdBy);
+        var campaign = new Campaign(request.Name.Trim(), template.Name, template.Language, JsonSerializer.Serialize(variables), createdBy);
         db.Campaigns.Add(campaign);
         db.AuditLogs.Add(new AuditLog
         {
@@ -64,7 +64,7 @@ public sealed class CampaignService(
         return await DescribeAsync(campaign.Id, ct);
     }
 
-    public async Task<CampaignDto> StartAsync(Guid campaignId, IReadOnlyList<string> variables, Guid startedBy, CancellationToken ct)
+    public async Task<CampaignDto> StartAsync(Guid campaignId, Guid startedBy, CancellationToken ct)
     {
         var campaign = await db.Campaigns.SingleOrDefaultAsync(x => x.Id == campaignId, ct)
             ?? throw new NotFoundException("Campaign not found.");
@@ -77,6 +77,9 @@ public sealed class CampaignService(
             .ToListAsync(ct);
 
         if (recipients.Count == 0) throw new ValidationException("No contacts are eligible: every contact has opted out or is inactive.");
+
+        // Exactly what was reviewed when the campaign was created, not whatever the caller sends now.
+        var variables = JsonSerializer.Deserialize<List<string>>(campaign.TemplateVariables) ?? [];
 
         campaign.Start(recipients.Count);
         foreach (var recipient in recipients)

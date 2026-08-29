@@ -13,6 +13,9 @@ import {
   matchesView,
   type Agent,
   type Auth,
+  type Campaign,
+  type CampaignAudience,
+  type MessageTemplate,
   type Dashboard,
   type Message,
   type Scope,
@@ -29,6 +32,7 @@ import { ConversationPanel } from "./ConversationPanel";
 import { DashboardView } from "./DashboardView";
 import { QueueTable } from "./QueueTable";
 import { TeamView } from "./TeamView";
+import { CampaignsView } from "./CampaignsView";
 
 /** Ceiling on reconciliation: at a hundred agents this is the difference between 5 and 1500 queries a second. */
 const RECONCILE_INTERVAL_MS = 15_000;
@@ -45,6 +49,12 @@ export function Workspace() {
   const [team, setTeam] = useState<Agent[]>([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamBusyId, setTeamBusyId] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [audience, setAudience] = useState<CampaignAudience | null>(null);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [campaignBusyId, setCampaignBusyId] = useState<string | null>(null);
+  const [templateError, setTemplateError] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusFilter>("active");
   const [search, setSearch] = useState("");
   // Typed text is applied on a delay: a request per keystroke would be one per agent per keystroke.
@@ -70,10 +80,11 @@ export function Workspace() {
   const [unseen, setUnseen] = useState(0);
 
   // The dashboard has no ticket list of its own; it borrows "mine" so the rail counts stay warm.
-  const scope: Scope = view === "dashboard" || view === "team" ? "mine" : view;
+  const scope: Scope = view === "dashboard" || view === "team" || view === "campaigns" ? "mine" : view;
   const token = auth?.accessToken;
   const canAssign = !!auth?.user.permissions.includes(PERMISSIONS.ticketsAssign);
   const canManageUsers = !!auth?.user.permissions.includes(PERMISSIONS.usersManage);
+  const canBroadcast = !!auth?.user.permissions.includes(PERMISSIONS.settingsManage);
 
   const alerts = useNotifications();
   useTitleBadge(unseen);
@@ -230,6 +241,51 @@ export function Workspace() {
   useEffect(() => {
     if (view === "team") loadTeam();
   }, [view, loadTeam]);
+
+  /**
+   * Templates come from Meta rather than from us, so listing them can fail for reasons an admin needs
+   * to read — an unconfigured business account, or a rejected token. The reason is surfaced rather
+   * than leaving the screen mysteriously empty.
+   */
+  const loadCampaigns = useCallback(async () => {
+    if (!token || !canBroadcast) return;
+    setCampaignsLoading(true);
+    try {
+      const [list, reach] = await Promise.all([api.campaigns(token), api.campaignAudience(token)]);
+      setCampaigns(list);
+      setAudience(reach);
+      try {
+        setTemplates(await api.templates(token));
+        setTemplateError(null);
+      } catch (cause) {
+        setTemplates([]);
+        setTemplateError((cause as Error).message);
+      }
+    } catch (cause) {
+      report(cause);
+    } finally {
+      setCampaignsLoading(false);
+    }
+  }, [token, canBroadcast, report]);
+
+  useEffect(() => {
+    if (view === "campaigns") loadCampaigns();
+  }, [view, loadCampaigns]);
+
+  const runCampaignAction = useCallback(
+    async (id: string | null, action: () => Promise<void>) => {
+      setCampaignBusyId(id);
+      try {
+        await action();
+        await loadCampaigns();
+      } catch (cause) {
+        report(cause);
+      } finally {
+        setCampaignBusyId(null);
+      }
+    },
+    [loadCampaigns, report],
+  );
 
   const runTeamAction = useCallback(
     async (id: string | null, action: () => Promise<void>) => {
@@ -567,6 +623,7 @@ export function Workspace() {
         user={auth.user}
         view={view}
         canManageUsers={canManageUsers}
+        canBroadcast={canBroadcast}
         counts={{ unassigned: unassignedCount }}
         realtime={realtime}
         onViewChange={next => {
@@ -585,6 +642,23 @@ export function Workspace() {
           canSeeAgents={canAssign}
           onOpenQueue={() => setView("unassigned")}
           onRefresh={loadDashboard}
+        />
+      ) : view === "campaigns" ? (
+        <CampaignsView
+          campaigns={campaigns}
+          templates={templates}
+          audience={audience}
+          loading={campaignsLoading}
+          busyId={campaignBusyId}
+          templateError={templateError}
+          onRefresh={loadCampaigns}
+          actions={{
+            onCreate: input => runCampaignAction(null, () => api.createCampaign(auth.accessToken, input).then(() => undefined)),
+            onStart: campaign =>
+              runCampaignAction(campaign.id, () => api.startCampaign(auth.accessToken, campaign.id).then(() => undefined)),
+            onSetPaused: (campaign, paused) =>
+              runCampaignAction(campaign.id, () => api.setCampaignPaused(auth.accessToken, campaign.id, paused).then(() => undefined)),
+          }}
         />
       ) : view === "team" ? (
         <TeamView

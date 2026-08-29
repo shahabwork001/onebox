@@ -1200,6 +1200,86 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+/* ---------------------------------------------------------------- campaigns */
+.notice-warn {
+  background: var(--warning-soft);
+  border-color: var(--warning-line);
+  color: var(--warning);
+}
+
+.notice-danger {
+  background: var(--danger-soft);
+  border-color: #e8c4c4;
+  color: var(--danger);
+}
+
+.campaign-form .span-2 {
+  grid-column: 1 / -1;
+}
+
+.preview-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-bottom: 6px;
+}
+
+/* Shown as the customer will see it, so an admin reviews the message rather than the template. */
+.template-preview {
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-lg);
+  border-top-right-radius: 2px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  max-width: 380px;
+}
+
+.progress {
+  min-width: 190px;
+}
+
+.progress-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--line-soft);
+  margin-bottom: 5px;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+}
+
+/* Read is the darkest because it is the outcome that actually counts. */
+.progress-read { background: var(--brand-strong); }
+.progress-delivered { background: var(--brand); }
+.progress-sent { background: #9fc7b6; }
+.progress-failed { background: var(--danger); }
+
+.progress-legend {
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+
+.cell-error {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.badge-draft { background: var(--line-soft); color: var(--ink-muted); }
+.badge-sending { background: var(--info-soft); color: var(--info); }
+.badge-paused { background: var(--warning-soft); color: var(--warning); }
+.badge-completed { background: var(--brand-soft); color: var(--brand-strong); }
+.badge-failed { background: var(--danger-soft); color: var(--danger); }
+
 /* ---------------------------------------------------------------- overflow menu */
 .action-menu {
   position: relative;

@@ -11,6 +11,7 @@ const VIEW_TO_SEGMENT: Record<View, string> = {
   mine: "inbox",
   all: "all",
   team: "team",
+  campaigns: "campaigns",
 };
 
 const SEGMENT_TO_VIEW: Record<string, View> = {
@@ -19,6 +20,7 @@ const SEGMENT_TO_VIEW: Record<string, View> = {
   inbox: "mine",
   all: "all",
   team: "team",
+  campaigns: "campaigns",
 };
 
 export type Route = { view: View; ticketId: string | null };
